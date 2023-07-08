@@ -11,7 +11,7 @@ pub struct Args {
     task: String,
 }
 
-/// Parses the cli arguments given to the programm and validates them.
+/// Parses the cli arguments given to the program and validates them.
 ///
 /// Validates:
 /// - the file exists
