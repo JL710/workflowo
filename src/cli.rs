@@ -5,10 +5,10 @@ use std::process;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// the configuration file
-    file: PathBuf,
+    pub file: PathBuf,
 
     /// the task that should be executed
-    task: String,
+    pub task: String,
 }
 
 /// Parses the cli arguments given to the program and validates them.
