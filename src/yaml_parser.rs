@@ -64,11 +64,11 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
                 match task_key.as_str().unwrap() {
                     "bash" => match parse_shell_command_task::<Bash>(task_value) {
                         Ok(task) => job.children.push(Box::new(task)),
-                        Err(err) => panic!("{}", err),
+                        Err(err) => panic!("Error in job {}: {}", root_key.as_str().unwrap(), err),
                     },
                     "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
                         Ok(task) => job.children.push(Box::new(task)),
-                        Err(err) => panic!("{}", err),
+                        Err(err) => panic!("Error in job {}: {}", root_key.as_str().unwrap(), err),
                     },
                     _ => panic!("unrecognized task in {}", root_key.as_str().unwrap()),
                 }
