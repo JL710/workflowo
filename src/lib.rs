@@ -36,10 +36,20 @@ impl Display for Job {
     }
 }
 
+trait ShellCommand {
+    fn new(args: Vec<String>, work_dir: Option<String>) -> Self;
+}
+
 #[derive(Debug)]
 pub struct Bash {
     args: Vec<String>,
     work_dir: Option<String>,
+}
+
+impl ShellCommand for Bash {
+    fn new(args: Vec<String>, work_dir: Option<String>) -> Self {
+        Bash { args, work_dir }
+    }
 }
 
 impl Task for Bash {
@@ -72,6 +82,12 @@ impl Display for Bash {
 pub struct Cmd {
     args: Vec<String>,
     work_dir: Option<String>,
+}
+
+impl ShellCommand for Cmd {
+    fn new(args: Vec<String>, work_dir: Option<String>) -> Self {
+        Cmd { args, work_dir }
+    }
 }
 
 impl Task for Cmd {
