@@ -1,4 +1,4 @@
-use crate::{Bash, Cmd, Job};
+use crate::{Bash, Cmd, Job, ShellCommand};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
@@ -62,11 +62,11 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
                 }
 
                 match task_key.as_str().unwrap() {
-                    "bash" => match parse_bash_task(task_value) {
+                    "bash" => match parse_shell_command_task::<Bash>(task_value) {
                         Ok(task) => job.children.push(Box::new(task)),
                         Err(err) => panic!("{}", err),
                     },
-                    "cmd" => match parse_cmd_task(task_value) {
+                    "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
                         Ok(task) => job.children.push(Box::new(task)),
                         Err(err) => panic!("{}", err),
                     },
@@ -81,81 +81,40 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
     jobs
 }
 
-fn parse_bash_task(value: &Value) -> Result<Bash, ParsingError> {
+fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, ParsingError> {
     match value {
         Value::String(content) => {
-            return Ok(Bash {
-                args: content
+            return Ok(T::new(
+                content
                     .split(' ')
                     .into_iter()
                     .map(|x| x.to_string())
                     .collect(),
-                work_dir: None,
-            });
+                None,
+            ));
         }
-        Value::Mapping(bash_map) => {
-            match bash_map.clone().entry("command".into()) {
-                serde_yaml::mapping::Entry::Vacant(_) => {
-                    return Err(ParsingError::new("Command not given"));
-                }
-                serde_yaml::mapping::Entry::Occupied(command_value) => {
-                    return Ok(Bash {
-                        args: command_value
-                            .get()
-                            .as_str()
-                            .unwrap()
-                            .split(' ')
-                            .into_iter()
-                            .map(|x| x.to_string())
-                            .collect(),
-                        work_dir: None,
-                    });
-                }
+        Value::Mapping(cmd_map) => match cmd_map.clone().entry("command".into()) {
+            serde_yaml::mapping::Entry::Vacant(_) => {
+                Err(ParsingError::new("Command not given"))
             }
-            todo!("workdir")
-        }
-        _ => Err(ParsingError::new(
-            "bash task in has a problem with its definition",
-        ))
-    }
-}
-
-fn parse_cmd_task(value: &Value) -> Result<Cmd, ParsingError> {
-    match value {
-        Value::String(content) => {
-            return Ok(Cmd {
-                args: content
-                    .split(' ')
-                    .into_iter()
-                    .map(|x| x.to_string())
-                    .collect(),
-                work_dir: None,
-            });
-        }
-        Value::Mapping(cmd_map) => {
-            match cmd_map.clone().entry("command".into()) {
-                serde_yaml::mapping::Entry::Vacant(_) => {
-                    return Err(ParsingError::new("Command not given"));
-                }
-                serde_yaml::mapping::Entry::Occupied(command_value) => {
-                    return Ok(Cmd {
-                        args: command_value
-                            .get()
-                            .as_str()
-                            .unwrap()
-                            .split(' ')
-                            .into_iter()
-                            .map(|x| x.to_string())
-                            .collect(),
-                        work_dir: None,
-                    });
-                }
+            serde_yaml::mapping::Entry::Occupied(command_value) => {
+                todo!("workdir");
+                return Ok(T::new(
+                    command_value
+                        .get()
+                        .as_str()
+                        .unwrap()
+                        .split(' ')
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect(),
+                    None,
+                ));
             }
-            todo!("workdir")
-        }
+        },
         _ => Err(ParsingError::new(
             "cmd task in has a problem with its definition",
-        ))
+        )),
     }
 }
 
