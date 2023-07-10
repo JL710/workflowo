@@ -13,14 +13,11 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
     let jobs = Vec::new();
 
     for (key, value) in data {
-        match value {
-            Value::Sequence(_) => {}
-            _ => {
-                panic!(
-                    "Parsing error with Job {}. Child is not of type Sequence!",
-                    key.as_str().unwrap()
-                );
-            }
+        if !value.is_sequence() {
+            panic!(
+                "Parsing error with Job {}. Child is not of type Sequence!",
+                key.as_str().unwrap()
+            );
         }
 
         let mut job = Job {
@@ -29,7 +26,7 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
         };
 
         for child_item in value.as_sequence().unwrap() {
-            if child_item.as_mapping().is_none() {
+            if !child_item.is_mapping() {
                 panic!(
                     "Parsing error with child of {}. Child is not of type Mapping!",
                     key.as_str().unwrap()
