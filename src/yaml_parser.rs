@@ -107,18 +107,17 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                 _ => None,
             };
 
-            match command_value {
-                Some(value) => {
-                    return Ok(T::new(
-                        value
-                            .split(' ')
-                            .into_iter()
-                            .map(|x| x.to_string())
-                            .collect(),
-                        work_dir_value,
-                    ))
-                }
-                None => Err(ParsingError::new("Command not given")),
+            if let Some(value) = command_value {
+                return Ok(T::new(
+                    value
+                        .split(' ')
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect(),
+                    work_dir_value,
+                ))
+            } else {
+                return Err(ParsingError::new("Command not given"))
             }
         }
         _ => Err(ParsingError::new("task has a problem with its definition")),
