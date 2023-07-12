@@ -93,28 +93,35 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                 None,
             ));
         }
-        Value::Mapping(cmd_map) => match cmd_map.clone().entry("command".into()) {
-            serde_yaml::mapping::Entry::Vacant(_) => {
-                Err(ParsingError::new("Command not given"))
+        Value::Mapping(cmd_map) => {
+            let command_value = match cmd_map.clone().entry("command".into()) {
+                serde_yaml::mapping::Entry::Occupied(value) => {
+                    Some(value.get().clone().as_str().unwrap().to_string())
+                }
+                _ => None,
+            };
+            let work_dir_value = match cmd_map.clone().entry("work_dir".into()) {
+                serde_yaml::mapping::Entry::Occupied(value) => {
+                    Some(value.get().clone().as_str().unwrap().to_string())
+                }
+                _ => None,
+            };
+
+            match command_value {
+                Some(value) => {
+                    return Ok(T::new(
+                        value
+                            .split(' ')
+                            .into_iter()
+                            .map(|x| x.to_string())
+                            .collect(),
+                        work_dir_value,
+                    ))
+                }
+                None => Err(ParsingError::new("Command not given")),
             }
-            serde_yaml::mapping::Entry::Occupied(command_value) => {
-                todo!("workdir");
-                return Ok(T::new(
-                    command_value
-                        .get()
-                        .as_str()
-                        .unwrap()
-                        .split(' ')
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .collect(),
-                    None,
-                ));
-            }
-        },
-        _ => Err(ParsingError::new(
-            "cmd task in has a problem with its definition",
-        )),
+        }
+        _ => Err(ParsingError::new("task has a problem with its definition")),
     }
 }
 
