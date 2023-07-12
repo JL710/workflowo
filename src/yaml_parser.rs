@@ -114,9 +114,9 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                         .map(|x| x.to_string())
                         .collect(),
                     work_dir_value,
-                ))
+                ));
             } else {
-                return Err(ParsingError::new("Command not given"))
+                Err(ParsingError::new("Command not given"))
             }
         }
         _ => Err(ParsingError::new("task has a problem with its definition")),
