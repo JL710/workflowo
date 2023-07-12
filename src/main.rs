@@ -11,7 +11,7 @@ fn main() {
         if job.name == args.task {
             println!("Executing Job {}", job.name);
             job.execute();
-            return
+            return;
         }
     }
     println!("Error! Job {} not found.", args.task);
