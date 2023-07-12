@@ -30,7 +30,7 @@ fn read_yaml_file(path: PathBuf) -> Mapping {
 }
 
 fn parse_jobs(data: Mapping) -> Vec<Job> {
-    let jobs = Vec::new();
+    let mut jobs = Vec::new();
 
     for (root_key, root_value) in data {
         if !root_value.is_sequence() {
@@ -74,8 +74,7 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
                 }
             }
         }
-
-        println!("{}", job);
+        jobs.push(job);
     }
 
     jobs

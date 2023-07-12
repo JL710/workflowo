@@ -7,12 +7,12 @@ use std::{
     process::{self, Command},
 };
 
-trait Task: Display {
+pub trait Task: Display {
     fn execute(&self);
 }
 
 pub struct Job {
-    name: String,
+    pub name: String,
     children: Vec<Box<dyn Task>>,
 }
 
