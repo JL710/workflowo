@@ -15,6 +15,10 @@ impl ParsingError {
             message: message.to_string(),
         }
     }
+
+    fn from_string(message: String) -> Self {
+        ParsingError { message }
+    }
 }
 
 impl fmt::Display for ParsingError {
@@ -32,52 +36,88 @@ fn read_yaml_file(path: PathBuf) -> Mapping {
 fn parse_jobs(data: Mapping) -> Vec<Job> {
     let mut jobs = Vec::new();
 
-    for (root_key, root_value) in data {
-        if !root_value.is_sequence() {
-            panic!(
-                "Parsing error with Job {}. Child is not of type Sequence!",
-                root_key.as_str().unwrap()
-            );
+    for (root_key, _root_value) in &data {
+        if !root_key.is_string() {
+            panic!("Job {:?} is has not a valid string as name", root_key);
         }
 
-        let mut job = Job {
-            name: root_key.as_str().unwrap().to_string(),
-            children: Vec::new(),
-        };
+        let job = parse_job(&data, root_key.as_str().unwrap().to_string());
 
-        for child_item in root_value.as_sequence().unwrap() {
-            if !child_item.is_mapping() {
-                panic!(
-                    "Parsing error with child of {}. Child is not of type Mapping!",
-                    root_key.as_str().unwrap()
-                );
-            }
-
-            for (task_key, task_value) in child_item.as_mapping().unwrap() {
-                if !task_key.is_string() {
-                    panic!(
-                        "task in job {} has an issue with the name",
-                        root_key.as_str().unwrap()
-                    );
-                }
-
-                match task_key.as_str().unwrap() {
-                    "bash" => match parse_shell_command_task::<Bash>(task_value) {
-                        Ok(task) => job.children.push(Box::new(task)),
-                        Err(err) => panic!("Error in job {}: {}", root_key.as_str().unwrap(), err),
-                    },
-                    "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
-                        Ok(task) => job.children.push(Box::new(task)),
-                        Err(err) => panic!("Error in job {}: {}", root_key.as_str().unwrap(), err),
-                    },
-                    _ => panic!("unrecognized task in {}", root_key.as_str().unwrap()),
-                }
-            }
+        match job {
+            Ok(value) => jobs.push(value),
+            Err(error) => panic!("Error: {}", error),
         }
-        jobs.push(job);
     }
 
     jobs
+}
+
+fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
+    let job_entry = match root_map.clone().entry(name.clone().into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => value.get().clone(),
+        _ => return Err(ParsingError::new("Job not found")),
+    };
+
+    let job_sequence = match job_entry.as_sequence() {
+        Some(value) => value,
+        None => {
+            return Err(ParsingError::from_string(format!(
+                "Child of {} is not a sequence",
+                name
+            )))
+        }
+    };
+
+    let mut job = Job {
+        name: name.clone(),
+        children: Vec::new(),
+    };
+
+    for child in job_sequence {
+        if !child.is_mapping() {
+            return Err(ParsingError::from_string(format!(
+                "Parsing error with child of {}. Child is not of type Mapping!",
+                name
+            )));
+        }
+
+        for (task_key, task_value) in child.as_mapping().unwrap() {
+            if !task_key.is_string() {
+                return Err(ParsingError::from_string(format!(
+                    "task in job {} has an issue with the name",
+                    name
+                )));
+            }
+
+            match task_key.as_str().unwrap() {
+                "bash" => match parse_shell_command_task::<Bash>(task_value) {
+                    Ok(task) => job.children.push(Box::new(task)),
+                    Err(err) => {
+                        return Err(ParsingError::from_string(format!(
+                            "Error in job {}: {}",
+                            name, err
+                        )))
+                    }
+                },
+                "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
+                    Ok(task) => job.children.push(Box::new(task)),
+                    Err(err) => {
+                        return Err(ParsingError::from_string(format!(
+                            "Error in job {}: {}",
+                            name, err
+                        )))
+                    }
+                },
+                _ => {
+                    return Err(ParsingError::from_string(format!(
+                        "unrecognized task in {}",
+                        name
+                    )))
+                }
+            }
+        }
+    }
+    Ok(job)
 }
 
 fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, ParsingError> {
