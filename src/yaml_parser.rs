@@ -74,6 +74,29 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
     };
 
     for child in job_sequence {
+        if child.is_string() {
+            if child.as_str().unwrap() == name {
+                return Err(ParsingError::from_string(format!(
+                    "Error in job {}. A Job can not call it self recursively!",
+                    name
+                )));
+            }
+
+            match parse_job(root_map, child.as_str().unwrap().to_string()) {
+                Ok(child_job) => {
+                    job.children.push(Box::new(child_job));
+                }
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "parsing error for child {}: {}",
+                        child.as_str().unwrap(),
+                        error
+                    )))
+                }
+            }
+            continue;
+        }
+
         if !child.is_mapping() {
             return Err(ParsingError::from_string(format!(
                 "Parsing error with child of {}. Child is not of type Mapping!",
