@@ -1,4 +1,4 @@
-use crate::{Bash, Cmd, Job, ShellCommand};
+use crate::{Bash, Cmd, Job, ShellCommand, Task};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
@@ -97,50 +97,55 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
             continue;
         }
 
-        if !child.is_mapping() {
-            return Err(ParsingError::from_string(format!(
-                "Parsing error with child of {}. Child is not of type Mapping!",
-                name
-            )));
-        }
-
-        for (task_key, task_value) in child.as_mapping().unwrap() {
-            if !task_key.is_string() {
+        match parse_task(child) {
+            Ok(task) => job.children.push(task),
+            Err(error) => {
                 return Err(ParsingError::from_string(format!(
-                    "task in job {} has an issue with the name",
-                    name
-                )));
-            }
-
-            match task_key.as_str().unwrap() {
-                "bash" => match parse_shell_command_task::<Bash>(task_value) {
-                    Ok(task) => job.children.push(Box::new(task)),
-                    Err(err) => {
-                        return Err(ParsingError::from_string(format!(
-                            "Error in job {}: {}",
-                            name, err
-                        )))
-                    }
-                },
-                "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
-                    Ok(task) => job.children.push(Box::new(task)),
-                    Err(err) => {
-                        return Err(ParsingError::from_string(format!(
-                            "Error in job {}: {}",
-                            name, err
-                        )))
-                    }
-                },
-                _ => {
-                    return Err(ParsingError::from_string(format!(
-                        "unrecognized task in {}",
-                        name
-                    )))
-                }
+                    "Error while parsing job {}: {}",
+                    name, error
+                )))
             }
         }
     }
     Ok(job)
+}
+
+fn parse_task(value: &Value) -> Result<Box<dyn Task>, ParsingError> {
+    if !value.is_mapping() {
+        return Err(ParsingError::new(
+            "Parsing error with task. Task is not of type Mapping!",
+        ));
+    }
+
+    if let Some((task_key, task_value)) = value.as_mapping().unwrap().into_iter().next() {
+        if !task_key.is_string() {
+            return Err(ParsingError::new("task has an issue with the name"));
+        }
+
+        match task_key.as_str().unwrap() {
+            "bash" => match parse_shell_command_task::<Bash>(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(err) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Error with bash task: {}",
+                        err
+                    )))
+                }
+            },
+            "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(err) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Error with cmd task: {}",
+                        err
+                    )))
+                }
+            },
+            _ => return Err(ParsingError::new("unrecognized task in")),
+        }
+    }
+
+    Err(ParsingError::new("Task could not be parsed"))
 }
 
 fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, ParsingError> {
