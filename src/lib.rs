@@ -8,6 +8,7 @@ use std::{
 };
 
 pub trait Task: Display {
+    /// Will be called when the task should be executed.
     fn execute(&self);
 }
 

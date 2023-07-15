@@ -186,6 +186,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
     }
 }
 
+/// Parses the file and returns a vector of the found jobs.
 pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
     parse_jobs(read_yaml_file(path))
 }
