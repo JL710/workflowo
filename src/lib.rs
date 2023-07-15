@@ -2,7 +2,7 @@ pub mod cli;
 pub mod yaml_parser;
 
 use std::{
-    fmt,
+    env, fmt,
     fmt::Display,
     process::{self, Command},
 };
@@ -114,5 +114,49 @@ impl Task for Cmd {
 impl Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", &self)
+    }
+}
+
+#[derive(Debug)]
+pub enum OS {
+    Windows,
+    Linux,
+}
+
+pub struct OSDependent {
+    os: OS,
+    children: Vec<Box<dyn Task>>,
+}
+
+impl Task for OSDependent {
+    fn execute(&self) {
+        match self.os {
+            OS::Windows => {
+                if env::consts::OS != "windows" {
+                    return;
+                }
+            }
+            OS::Linux => {
+                if env::consts::OS != "linux" {
+                    return;
+                }
+            }
+        }
+
+        for child in &self.children {
+            child.execute();
+        }
+    }
+}
+
+impl Display for OSDependent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut text = format!("OSDependent: {{ os \"{:?}\" children {{ ", &self.os);
+        for child in &self.children {
+            text += &format!("{} ", child);
+        }
+        text += "} }";
+
+        write!(f, "{}", text)
     }
 }
