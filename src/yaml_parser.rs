@@ -74,30 +74,7 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
     };
 
     for child in job_sequence {
-        if child.is_string() {
-            if child.as_str().unwrap() == name {
-                return Err(ParsingError::from_string(format!(
-                    "Error in job {}. A Job can not call it self recursively!",
-                    name
-                )));
-            }
-
-            match parse_job(root_map, child.as_str().unwrap().to_string()) {
-                Ok(child_job) => {
-                    job.children.push(Box::new(child_job));
-                }
-                Err(error) => {
-                    return Err(ParsingError::from_string(format!(
-                        "parsing error for child {}: {}",
-                        child.as_str().unwrap(),
-                        error
-                    )))
-                }
-            }
-            continue;
-        }
-
-        match parse_task(child) {
+        match parse_task(root_map, child) {
             Ok(task) => job.children.push(task),
             Err(error) => {
                 return Err(ParsingError::from_string(format!(
@@ -110,7 +87,22 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
     Ok(job)
 }
 
-fn parse_task(value: &Value) -> Result<Box<dyn Task>, ParsingError> {
+fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, ParsingError> {
+    if value.is_string() {
+        match parse_job(root_map, value.as_str().unwrap().to_string()) {
+            Ok(child_job) => {
+                return Ok(Box::new(child_job));
+            }
+            Err(error) => {
+                return Err(ParsingError::from_string(format!(
+                    "parsing error for task {}: {}",
+                    value.as_str().unwrap(),
+                    error
+                )))
+            }
+        }
+    }
+
     if !value.is_mapping() {
         return Err(ParsingError::new(
             "Parsing error with task. Task is not of type Mapping!",
@@ -141,6 +133,8 @@ fn parse_task(value: &Value) -> Result<Box<dyn Task>, ParsingError> {
                     )))
                 }
             },
+            "on-windows" => todo!(),
+            "on-linux" => todo!(),
             _ => return Err(ParsingError::new("unrecognized task in")),
         }
     }
