@@ -1,4 +1,4 @@
-use crate::{Bash, Cmd, Job, ShellCommand, Task};
+use crate::{Bash, Cmd, Job, OSDependent, ShellCommand, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
@@ -133,13 +133,57 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
-            "on-windows" => todo!(),
-            "on-linux" => todo!(),
+            "on-windows" => match parse_os_dependent(root_map, OS::Windows, task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "parsing Error in on-windows: {}",
+                        error
+                    )))
+                }
+            },
+            "on-linux" => match parse_os_dependent(root_map, OS::Linux, task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "parsing Error in on-windows: {}",
+                        error
+                    )))
+                }
+            },
             _ => return Err(ParsingError::new("unrecognized task in")),
         }
     }
 
     Err(ParsingError::new("Task could not be parsed"))
+}
+
+fn parse_os_dependent(
+    root_map: &Mapping,
+    os: OS,
+    value: &Value,
+) -> Result<OSDependent, ParsingError> {
+    if !value.is_sequence() {
+        return Err(ParsingError::new("value is not a sequence"));
+    }
+
+    let mut task = OSDependent {
+        os,
+        children: Vec::new(),
+    };
+    for child_item in value.as_sequence().unwrap() {
+        match parse_task(root_map, child_item) {
+            Ok(child_task) => task.children.push(child_task),
+            Err(error) => {
+                return Err(ParsingError::from_string(format!(
+                    "could not parse child task for {}: {}",
+                    task, error
+                )))
+            }
+        }
+    }
+
+    Ok(task)
 }
 
 fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, ParsingError> {
