@@ -9,3 +9,4 @@ edition = "2021"
 clap = { version = "4.3.11" , features = ["derive"]}
 serde = { version = "1.0.167", features = ["derive"] }
 serde_yaml = "0.9.22"
+ssh2 = "0.9.4"
