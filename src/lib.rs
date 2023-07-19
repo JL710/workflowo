@@ -160,3 +160,38 @@ impl Display for OSDependent {
         write!(f, "{}", text)
     }
 }
+
+#[derive(Debug)]
+struct SshCommand {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    command: String,
+}
+
+impl Task for SshCommand {
+    fn execute(&self) {
+        // create connection with handshake etc.
+        let tcp = std::net::TcpStream::connect(self.address.to_string()).unwrap();
+        let mut sess = ssh2::Session::new().unwrap();
+        sess.set_tcp_stream(tcp);
+        sess.handshake().unwrap();
+
+        // authenticate
+        sess.userauth_password(&self.user, &self.password).unwrap();
+
+        // execute command
+        let mut channel = sess.channel_session().unwrap();
+        channel.exec(&self.command).unwrap();
+
+        // exit channel
+        channel.wait_close().unwrap();
+        assert!(channel.exit_status().unwrap() == 0);
+    }
+}
+
+impl Display for SshCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
