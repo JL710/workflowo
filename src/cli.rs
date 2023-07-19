@@ -7,8 +7,8 @@ pub struct Args {
     /// the configuration file
     pub file: PathBuf,
 
-    /// the task that should be executed
-    pub task: String,
+    /// the job that should be executed
+    pub job: String,
 }
 
 /// Parses the cli arguments given to the program and validates them.
