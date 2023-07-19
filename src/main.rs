@@ -8,11 +8,11 @@ fn main() {
     let jobs = yaml_parser::jobs_from_file(args.file);
     for job in &jobs {
         println!("{}", job);
-        if job.name == args.task {
+        if job.name == args.job {
             println!("Executing Job {}", job.name);
             job.execute();
             return;
         }
     }
-    println!("Error! Job {} not found.", args.task);
+    println!("Error! Job {} not found.", args.job);
 }
