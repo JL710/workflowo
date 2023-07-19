@@ -56,8 +56,8 @@ Sometimes it is needed to execute only if you are on a specific os.
 Therefore there is a solution.
 ```yaml
 somejob:
-    on-linux:
+    - on-linux:
         - bash: 'echo "Hello World!"'  # will only be executed if you are on Linux
-    on-windows:
+    - on-windows:
         - cmd: 'echo "Hello World!"'  # will only be executed if you are on Windows
 ```
