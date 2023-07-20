@@ -43,6 +43,10 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
             panic!("Job {:?} is has not a valid string as name", root_key);
         }
 
+        if root_key.as_str().unwrap() == "IGNORE" {
+            continue;
+        }
+
         let job = parse_job(&data, root_key.as_str().unwrap().to_string());
 
         match job {
