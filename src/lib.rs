@@ -4,7 +4,8 @@ pub mod yaml_parser;
 use std::{
     env, fmt,
     fmt::Display,
-    io::Read,
+    io::{Read, Write},
+    path::PathBuf,
     process::{self, Command},
 };
 
@@ -214,7 +215,55 @@ impl Display for SshCommand {
             f,
             "{}",
             format!("{:?}", self)
-                .replace(&self.password, "***Not displayed for securety reasons***")
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+#[derive(Debug)]
+struct ScpFileDownload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl Task for ScpFileDownload {
+    fn execute(&self) {
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        // receive file
+        let (mut remote_file, _stat) = session.scp_recv(&self.remote_path).unwrap();
+        let mut contents = Vec::new();
+        remote_file.read_to_end(&mut contents).unwrap();
+
+        // close channel and wait for the content to be transferred
+        remote_file.send_eof().unwrap();
+        remote_file.wait_eof().unwrap();
+        remote_file.close().unwrap();
+        remote_file.wait_close().unwrap();
+
+        // write content to local file
+        let mut file = std::fs::File::create(&self.local_path).unwrap();
+        file.write_all(&contents).unwrap();
+    }
+}
+
+impl Display for ScpFileDownload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
         )
     }
 }
