@@ -13,7 +13,7 @@ A Job has children.
 These children are Tasks. 
 When a Job gets executed all of its children get executed in order.
 ```yaml
-somejob:
+example_job:
     - child1
     - child2
 ```
@@ -39,13 +39,13 @@ job2:
 
 Short use:
 ```yaml
-someJob:
+example_job:
     - cmd: 'echo "Hello World"'
 ```
 
 Long use:
 ```yaml
-someJob:
+example_job:
     - bash:
         command: 'mkdir test'
         work_dir: "/home/someUser"
@@ -55,7 +55,7 @@ someJob:
 Sometimes it is needed to execute only if you are on a specific os.
 Therefore there is a solution.
 ```yaml
-somejob:
+example_job:
     - on-linux:
         - bash: 'echo "Hello World!"'  # will only be executed if you are on Linux
     - on-windows:
@@ -64,11 +64,11 @@ somejob:
 
 ### SSH
 ```yaml
-ssh_test2:
+example_job:
   - ssh:
       address: 192.168.114.12
-      username: "someuser"
-      password: "some good password"
+      username: "some_user"
+      password: "some_good_password"
       commands:
         - "mkdir newly_created_directory"
         - "rmdir newly_created_directory"
