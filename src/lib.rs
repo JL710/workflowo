@@ -4,6 +4,7 @@ pub mod yaml_parser;
 use std::{
     env, fmt,
     fmt::Display,
+    io::Read,
     process::{self, Command},
 };
 
@@ -42,7 +43,7 @@ trait ShellCommand {
 }
 
 #[derive(Debug)]
-pub struct Bash {
+struct Bash {
     args: Vec<String>,
     work_dir: Option<String>,
 }
@@ -80,7 +81,7 @@ impl Display for Bash {
 }
 
 #[derive(Debug)]
-pub struct Cmd {
+struct Cmd {
     args: Vec<String>,
     work_dir: Option<String>,
 }
@@ -123,7 +124,7 @@ pub enum OS {
     Linux,
 }
 
-pub struct OSDependent {
+struct OSDependent {
     os: OS,
     children: Vec<Box<dyn Task>>,
 }
@@ -158,5 +159,62 @@ impl Display for OSDependent {
         text += "} }";
 
         write!(f, "{}", text)
+    }
+}
+
+#[derive(Debug)]
+struct SshCommand {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    commands: Vec<String>,
+}
+
+/// Executes a command on the `Session`. Returns a Tuple with the Prompt and exit code.
+fn execute_on_session(session: &ssh2::Session, command: &str) -> (String, i32) {
+    let mut channel = session.channel_session().unwrap();
+
+    channel.exec(command).unwrap();
+
+    let mut stdout = String::new();
+    channel.read_to_string(&mut stdout).unwrap();
+
+    channel.wait_close().unwrap();
+
+    (stdout, channel.exit_status().unwrap())
+}
+
+impl Task for SshCommand {
+    fn execute(&self) {
+        // create connection with handshake etc.
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut sess = ssh2::Session::new().unwrap();
+        sess.set_tcp_stream(tcp);
+        sess.handshake().unwrap();
+
+        // authenticate
+        sess.userauth_password(&self.user, &self.password).unwrap();
+
+        // execute command
+        for command in &self.commands {
+            let (_stdout, exit_code) = execute_on_session(&sess, command);
+            if exit_code != 0 {
+                panic!(
+                    "Something went wrong while executing an command (`{}`). Exit code {}.",
+                    command, exit_code
+                )
+            }
+        }
+    }
+}
+
+impl Display for SshCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for securety reasons***")
+        )
     }
 }
