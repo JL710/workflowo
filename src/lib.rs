@@ -197,13 +197,24 @@ impl Task for SshCommand {
 
         // execute command
         for command in &self.commands {
-            execute_on_session(&sess, command);
+            let (_stdout, exit_code) = execute_on_session(&sess, command);
+            if exit_code != 0 {
+                panic!(
+                    "Something went wrong while executing an command (`{}`). Exit code {}.",
+                    command, exit_code
+                )
+            }
         }
     }
 }
 
 impl Display for SshCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for securety reasons***")
+        )
     }
 }
