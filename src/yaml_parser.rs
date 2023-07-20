@@ -1,8 +1,10 @@
-use crate::{Bash, Cmd, Job, OSDependent, ShellCommand, Task, OS};
+use crate::{Bash, Cmd, Job, OSDependent, ShellCommand, SshCommand, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 struct ParsingError {
@@ -151,11 +153,87 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
+            "ssh" => match parse_ssh(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in ssh: {}",
+                        error
+                    )))
+                }
+            },
             _ => return Err(ParsingError::new("unrecognized task in")),
         }
     }
 
     Err(ParsingError::new("Task could not be parsed"))
+}
+
+fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
+    if !value.is_mapping() {
+        return Err(ParsingError::new("Value is not of type Mapping"));
+    }
+
+    let username = match value.as_mapping().unwrap().clone().entry("username".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("username is not a string"));
+            }
+            value.get().as_str().unwrap().to_string()
+        }
+        _ => return Err(ParsingError::new("username is not given")),
+    };
+
+    let password = match value.as_mapping().unwrap().clone().entry("password".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("password is not a string"));
+            }
+            value.get().as_str().unwrap().to_string()
+        }
+        _ => return Err(ParsingError::new("password is not given")),
+    };
+
+    let address = match value.as_mapping().unwrap().clone().entry("address".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("address is not a string"));
+            }
+            match Ipv4Addr::from_str(value.get().as_str().unwrap()) {
+                Ok(value) => value,
+                Err(error) => return Err(ParsingError::from_string(error.to_string())),
+            }
+        }
+        _ => return Err(ParsingError::new("address is not given")),
+    };
+
+    let command_sequence = match value.as_mapping().unwrap().clone().entry("commands".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_sequence() {
+                return Err(ParsingError::new("commands are not a sequence"));
+            }
+            value.get().as_sequence().unwrap().clone()
+        }
+        _ => return Err(ParsingError::new("commands are not given")),
+    };
+
+    let mut commands = Vec::new();
+    for item in command_sequence {
+        if !item.is_string() {
+            return Err(ParsingError::from_string(format!(
+                "command is not a string: {:?}",
+                item
+            )));
+        }
+        commands.push(item.as_str().unwrap().to_owned());
+    }
+
+    Ok(SshCommand {
+        address,
+        password,
+        user: username,
+        commands,
+    })
 }
 
 fn parse_os_dependent(
