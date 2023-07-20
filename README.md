@@ -61,3 +61,15 @@ somejob:
     - on-windows:
         - cmd: 'echo "Hello World!"'  # will only be executed if you are on Windows
 ```
+
+### SSH
+```yaml
+ssh_test2:
+  - ssh:
+      address: 192.168.114.12
+      username: "someuser"
+      password: "some good password"
+      commands:
+        - "mkdir newly_created_directory"
+        - "rmdir newly_created_directory"
+```
