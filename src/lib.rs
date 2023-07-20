@@ -4,6 +4,7 @@ pub mod yaml_parser;
 use std::{
     env, fmt,
     fmt::Display,
+    io::Read,
     process::{self, Command},
 };
 
@@ -166,7 +167,21 @@ struct SshCommand {
     address: std::net::Ipv4Addr,
     user: String,
     password: String,
-    command: String,
+    commands: Vec<String>,
+}
+
+/// Executes a command on the `Session`. Returns a Tuple with the Prompt and exit code.
+fn execute_on_session(session: &ssh2::Session, command: &str) -> (String, i32) {
+    let mut channel = session.channel_session().unwrap();
+
+    channel.exec(command).unwrap();
+
+    let mut stdout = String::new();
+    channel.read_to_string(&mut stdout).unwrap();
+
+    channel.wait_close().unwrap();
+
+    (stdout, channel.exit_status().unwrap())
 }
 
 impl Task for SshCommand {
@@ -181,12 +196,9 @@ impl Task for SshCommand {
         sess.userauth_password(&self.user, &self.password).unwrap();
 
         // execute command
-        let mut channel = sess.channel_session().unwrap();
-        channel.exec(&self.command).unwrap();
-
-        // exit channel
-        channel.wait_close().unwrap();
-        assert!(channel.exit_status().unwrap() == 0);
+        for command in &self.commands {
+            execute_on_session(&sess, command);
+        }
     }
 }
 
