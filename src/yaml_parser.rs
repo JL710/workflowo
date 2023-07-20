@@ -6,6 +6,24 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+/// Gets an entry out of a map. Is needed for single merging (https://yaml.org/type/merge.html).
+fn get_entry(map: &Mapping, key: Value) -> Option<Value> {
+    match map.clone().entry(key.clone()) {
+        serde_yaml::mapping::Entry::Occupied(value) => return Some(value.get().to_owned()),
+        _ => match map.clone().entry("<<".into()) {
+            serde_yaml::mapping::Entry::Occupied(merged_value) => {
+                match merged_value.get().as_mapping().unwrap().clone().entry(key) {
+                    serde_yaml::mapping::Entry::Occupied(value) => {
+                        return Some(value.get().to_owned())
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ParsingError {
     message: String,
@@ -59,8 +77,8 @@ fn parse_jobs(data: Mapping) -> Vec<Job> {
 }
 
 fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
-    let job_entry = match root_map.clone().entry(name.clone().into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => value.get().clone(),
+    let job_entry = match get_entry(root_map, name.clone().into()) {
+        Some(value) => value,
         _ => return Err(ParsingError::new("Job not found")),
     };
 
@@ -187,32 +205,32 @@ fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingErro
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
 
-    let username = match value.as_mapping().unwrap().clone().entry("username".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("username is not a string"));
             }
-            value.get().as_str().unwrap().to_string()
+            value.as_str().unwrap().to_string()
         }
         _ => return Err(ParsingError::new("username is not given")),
     };
 
-    let password = match value.as_mapping().unwrap().clone().entry("password".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("password is not a string"));
             }
-            value.get().as_str().unwrap().to_string()
+            value.as_str().unwrap().to_string()
         }
         _ => return Err(ParsingError::new("password is not given")),
     };
 
-    let address = match value.as_mapping().unwrap().clone().entry("address".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("address is not a string"));
             }
-            match Ipv4Addr::from_str(value.get().as_str().unwrap()) {
+            match Ipv4Addr::from_str(value.as_str().unwrap()) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             }
@@ -220,17 +238,12 @@ fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingErro
         _ => return Err(ParsingError::new("address is not given")),
     };
 
-    let remote_path = match value
-        .as_mapping()
-        .unwrap()
-        .clone()
-        .entry("remote_path".into())
-    {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let remote_path = match get_entry(value.as_mapping().unwrap(), "remote_path".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("remote_path is not a string"));
             }
-            match std::path::PathBuf::from_str(value.get().as_str().unwrap()) {
+            match std::path::PathBuf::from_str(value.as_str().unwrap()) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             }
@@ -238,17 +251,12 @@ fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingErro
         _ => return Err(ParsingError::new("remote_path is not given")),
     };
 
-    let local_path = match value
-        .as_mapping()
-        .unwrap()
-        .clone()
-        .entry("local_path".into())
-    {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let local_path = match get_entry(value.as_mapping().unwrap(), "local_path".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("local_path is not a string"));
             }
-            match std::path::PathBuf::from_str(value.get().as_str().unwrap()) {
+            match std::path::PathBuf::from_str(value.as_str().unwrap()) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             }
@@ -270,32 +278,32 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
 
-    let username = match value.as_mapping().unwrap().clone().entry("username".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("username is not a string"));
             }
-            value.get().as_str().unwrap().to_string()
+            value.as_str().unwrap().to_string()
         }
         _ => return Err(ParsingError::new("username is not given")),
     };
 
-    let password = match value.as_mapping().unwrap().clone().entry("password".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("password is not a string"));
             }
-            value.get().as_str().unwrap().to_string()
+            value.as_str().unwrap().to_string()
         }
         _ => return Err(ParsingError::new("password is not given")),
     };
 
-    let address = match value.as_mapping().unwrap().clone().entry("address".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_string() {
+    let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
+        Some(value) => {
+            if !value.is_string() {
                 return Err(ParsingError::new("address is not a string"));
             }
-            match Ipv4Addr::from_str(value.get().as_str().unwrap()) {
+            match Ipv4Addr::from_str(value.as_str().unwrap()) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             }
@@ -303,12 +311,12 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
         _ => return Err(ParsingError::new("address is not given")),
     };
 
-    let command_sequence = match value.as_mapping().unwrap().clone().entry("commands".into()) {
-        serde_yaml::mapping::Entry::Occupied(value) => {
-            if !value.get().is_sequence() {
+    let command_sequence = match get_entry(value.as_mapping().unwrap(), "commands".into()) {
+        Some(value) => {
+            if !value.is_sequence() {
                 return Err(ParsingError::new("commands are not a sequence"));
             }
-            value.get().as_sequence().unwrap().clone()
+            value.as_sequence().unwrap().clone()
         }
         _ => return Err(ParsingError::new("commands are not given")),
     };
@@ -373,18 +381,10 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
             ));
         }
         Value::Mapping(cmd_map) => {
-            let command_value = match cmd_map.clone().entry("command".into()) {
-                serde_yaml::mapping::Entry::Occupied(value) => {
-                    Some(value.get().clone().as_str().unwrap().to_string())
-                }
-                _ => None,
-            };
-            let work_dir_value = match cmd_map.clone().entry("work_dir".into()) {
-                serde_yaml::mapping::Entry::Occupied(value) => {
-                    Some(value.get().clone().as_str().unwrap().to_string())
-                }
-                _ => None,
-            };
+            let command_value = get_entry(cmd_map, "command".into())
+                .map(|value: Value| value.as_str().unwrap().to_string());
+            let work_dir_value = get_entry(cmd_map, "work_dir".into())
+                .map(|value| value.as_str().unwrap().to_string());
 
             if let Some(value) = command_value {
                 return Ok(T::new(
