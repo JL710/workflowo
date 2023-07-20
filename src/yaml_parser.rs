@@ -1,4 +1,4 @@
-use crate::{Bash, Cmd, Job, OSDependent, ShellCommand, SshCommand, Task, OS};
+use crate::{Bash, Cmd, Job, OSDependent, ScpFileDownload, ShellCommand, SshCommand, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
@@ -162,11 +162,103 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
+            "scp-download" => match parse_scp_file_download(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in ssh: {}",
+                        error
+                    )))
+                }
+            },
             _ => return Err(ParsingError::new("unrecognized task in")),
         }
     }
 
     Err(ParsingError::new("Task could not be parsed"))
+}
+
+fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingError> {
+    if !value.is_mapping() {
+        return Err(ParsingError::new("Value is not of type Mapping"));
+    }
+
+    let username = match value.as_mapping().unwrap().clone().entry("username".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("username is not a string"));
+            }
+            value.get().as_str().unwrap().to_string()
+        }
+        _ => return Err(ParsingError::new("username is not given")),
+    };
+
+    let password = match value.as_mapping().unwrap().clone().entry("password".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("password is not a string"));
+            }
+            value.get().as_str().unwrap().to_string()
+        }
+        _ => return Err(ParsingError::new("password is not given")),
+    };
+
+    let address = match value.as_mapping().unwrap().clone().entry("address".into()) {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("address is not a string"));
+            }
+            match Ipv4Addr::from_str(value.get().as_str().unwrap()) {
+                Ok(value) => value,
+                Err(error) => return Err(ParsingError::from_string(error.to_string())),
+            }
+        }
+        _ => return Err(ParsingError::new("address is not given")),
+    };
+
+    let remote_path = match value
+        .as_mapping()
+        .unwrap()
+        .clone()
+        .entry("remote_path".into())
+    {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("remote_path is not a string"));
+            }
+            match std::path::PathBuf::from_str(value.get().as_str().unwrap()) {
+                Ok(value) => value,
+                Err(error) => return Err(ParsingError::from_string(error.to_string())),
+            }
+        }
+        _ => return Err(ParsingError::new("remote_path is not given")),
+    };
+
+    let local_path = match value
+        .as_mapping()
+        .unwrap()
+        .clone()
+        .entry("local_path".into())
+    {
+        serde_yaml::mapping::Entry::Occupied(value) => {
+            if !value.get().is_string() {
+                return Err(ParsingError::new("local_path is not a string"));
+            }
+            match std::path::PathBuf::from_str(value.get().as_str().unwrap()) {
+                Ok(value) => value,
+                Err(error) => return Err(ParsingError::from_string(error.to_string())),
+            }
+        }
+        _ => return Err(ParsingError::new("local_path is not given")),
+    };
+
+    Ok(ScpFileDownload {
+        address,
+        user: username,
+        password,
+        remote_path,
+        local_path,
+    })
 }
 
 fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {

@@ -66,10 +66,22 @@ example_job:
 ```yaml
 example_job:
   - ssh:
-      address: 192.168.114.12
+      address: 192.128.114.12
       username: "some_user"
       password: "some_good_password"
       commands:
         - "mkdir newly_created_directory"
         - "rmdir newly_created_directory"
+```
+
+### SCP Download
+With the `scp-download` task you can download files from a remote computer via ssh onto your local.
+```yaml
+example_job:
+  - scp-download:
+      address: 192.128.114.12
+      username: "some_user"
+      password: "some_good_password"
+      remote_path: "/home/some_user/remote_file.txt"
+      local_path: "some_local_file"
 ```
