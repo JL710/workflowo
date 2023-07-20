@@ -43,7 +43,7 @@ trait ShellCommand {
 }
 
 #[derive(Debug)]
-pub struct Bash {
+struct Bash {
     args: Vec<String>,
     work_dir: Option<String>,
 }
@@ -81,7 +81,7 @@ impl Display for Bash {
 }
 
 #[derive(Debug)]
-pub struct Cmd {
+struct Cmd {
     args: Vec<String>,
     work_dir: Option<String>,
 }
@@ -124,7 +124,7 @@ pub enum OS {
     Linux,
 }
 
-pub struct OSDependent {
+struct OSDependent {
     os: OS,
     children: Vec<Box<dyn Task>>,
 }
@@ -187,7 +187,7 @@ fn execute_on_session(session: &ssh2::Session, command: &str) -> (String, i32) {
 impl Task for SshCommand {
     fn execute(&self) {
         // create connection with handshake etc.
-        let tcp = std::net::TcpStream::connect(self.address.to_string()).unwrap();
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
         let mut sess = ssh2::Session::new().unwrap();
         sess.set_tcp_stream(tcp);
         sess.handshake().unwrap();
