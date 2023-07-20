@@ -85,3 +85,11 @@ example_job:
       remote_path: "/home/some_user/remote_file.txt"
       local_path: "some_local_file"
 ```
+
+
+## IGNORE
+Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section.
+````yaml
+IGNORE:
+    whatever_you_do_here_will_be_ignored
+```
