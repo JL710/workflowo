@@ -104,6 +104,12 @@ example_job:
       local_path: "some_local_file.txt"
 ```
 
+### Print
+Prints a value into the prompt.
+```yaml
+example_job:
+  - print: "Hello World!"
+```
 
 ## IGNORE
 Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section. 

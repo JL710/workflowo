@@ -63,7 +63,11 @@ impl Task for Bash {
             command.current_dir(work_dir);
         }
 
-        let output = command.arg("-c").arg(&self.args.join(" ")).output().unwrap();
+        let output = command
+            .arg("-c")
+            .arg(&self.args.join(" "))
+            .output()
+            .unwrap();
         if !output.status.success() {
             println!(
                 "Error: {:?} did not success and raised an error!\n{}",
@@ -340,7 +344,9 @@ impl Task for ScpFileUpload {
         file.read_to_end(&mut content).unwrap();
 
         // upload file
-        let mut remote_file = session.scp_send(&self.remote_path, 0o644, content.len() as u64, None).unwrap();
+        let mut remote_file = session
+            .scp_send(&self.remote_path, 0o644, content.len() as u64, None)
+            .unwrap();
         remote_file.write_all(&content).unwrap();
 
         // close channel and wait for the content to be transferred
@@ -359,5 +365,22 @@ impl Display for ScpFileUpload {
             format!("{:?}", self)
                 .replace(&self.password, "***Not displayed for security reasons***")
         )
+    }
+}
+
+#[derive(Debug)]
+struct PrintTask {
+    prompt: String,
+}
+
+impl Task for PrintTask {
+    fn execute(&self) {
+        println!("{}", self.prompt);
+    }
+}
+
+impl Display for PrintTask {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

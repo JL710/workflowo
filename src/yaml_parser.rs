@@ -1,6 +1,6 @@
 use crate::{
-    Bash, Cmd, Job, OSDependent, Scp, ScpFileDownload, ScpFileUpload, ShellCommand, SshCommand,
-    Task, OS,
+    Bash, Cmd, Job, OSDependent, PrintTask, Scp, ScpFileDownload, ScpFileUpload, ShellCommand,
+    SshCommand, Task, OS,
 };
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
@@ -182,7 +182,7 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                 Ok(task) => return Ok(Box::new(task)),
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
-                        "Parsing Error in ssh: {}",
+                        "Parsing Error in scp-download: {}",
                         error
                     )))
                 }
@@ -191,9 +191,18 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                 Ok(task) => return Ok(Box::new(task)),
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
-                        "Parsing Error in ssh: {}",
+                        "Parsing Error in scp-upload: {}",
                         error
                     )))
+                }
+            },
+            "print" => match parse_print(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in print: {}",
+                        error
+                    )));
                 }
             },
             _ => return Err(ParsingError::new("unrecognized task in")),
@@ -201,6 +210,15 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
     }
 
     Err(ParsingError::new("Task could not be parsed"))
+}
+
+fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
+    match value {
+        serde_yaml::Value::String(prompt) => Ok(PrintTask {
+            prompt: prompt.to_owned(),
+        }),
+        _ => Err(ParsingError::new("print value is not a string")),
+    }
 }
 
 fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
