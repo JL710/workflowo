@@ -6,21 +6,11 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-/// Gets an entry out of a map. Is needed for single merging (https://yaml.org/type/merge.html).
+/// Gets an entry out of a map.
 fn get_entry(map: &Mapping, key: Value) -> Option<Value> {
-    match map.clone().entry(key.clone()) {
-        serde_yaml::mapping::Entry::Occupied(value) => return Some(value.get().to_owned()),
-        _ => match map.clone().entry("<<".into()) {
-            serde_yaml::mapping::Entry::Occupied(merged_value) => {
-                match merged_value.get().as_mapping().unwrap().clone().entry(key) {
-                    serde_yaml::mapping::Entry::Occupied(value) => {
-                        return Some(value.get().to_owned())
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        },
+    match map.clone().entry(key) {
+        serde_yaml::mapping::Entry::Occupied(value) => Some(value.get().to_owned()),
+        _ => None,
     }
 }
 
