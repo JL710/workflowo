@@ -49,8 +49,9 @@ impl fmt::Display for ParsingError {
 
 fn read_yaml_file(path: PathBuf) -> Mapping {
     let file = File::open(path).unwrap();
-    let value: Mapping = serde_yaml::from_reader(file).unwrap();
-    value
+    let mut value: Value = serde_yaml::from_reader(file).unwrap();
+    value.apply_merge().unwrap();
+    value.as_mapping().unwrap().to_owned()
 }
 
 fn parse_jobs(data: Mapping) -> Vec<Job> {
