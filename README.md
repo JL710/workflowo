@@ -86,9 +86,23 @@ example_job:
       local_path: "some_local_file"
 ```
 
+### SCP Upload
+With the `scp-upload` task you can upload files from a remote computer via ssh onto your local.
+```yaml
+example_job:
+  - scp-upload:
+      address: 192.128.114.12
+      username: "some_user"
+      password: "some_good_password"
+      remote_path: "/home/some_user/remote_file.txt"
+      local_path: "some_local_file.txt"
+```
+
 
 ## IGNORE
-Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section.
+Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section. 
+
+Could be useful to define secrets(passwords etc.) once and use it anywhere.
 ````yaml
 IGNORE:
     whatever_you_do_here_will_be_ignored
