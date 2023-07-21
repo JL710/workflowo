@@ -63,7 +63,7 @@ impl Task for Bash {
             command.current_dir(work_dir);
         }
 
-        let output = command.arg("-c").args(&self.args).output().unwrap();
+        let output = command.arg("-c").arg(&self.args.join(" ")).output().unwrap();
         if !output.status.success() {
             println!(
                 "Error: {:?} did not success and raised an error!\n{}",
