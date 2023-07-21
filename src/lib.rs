@@ -325,7 +325,29 @@ impl Scp for ScpFileUpload {
 
 impl Task for ScpFileUpload {
     fn execute(&self) {
-        todo!()
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        // read file
+        let mut file = std::fs::File::open(&self.local_path).unwrap();
+        let mut content = Vec::new();
+        file.read_to_end(&mut content).unwrap();
+
+        // upload file
+        let mut remote_file = session.scp_send(&self.remote_path, 0o644, content.len() as u64, None).unwrap();
+        remote_file.write_all(&content).unwrap();
+
+        // close channel and wait for the content to be transferred
+        remote_file.send_eof().unwrap();
+        remote_file.wait_eof().unwrap();
+        remote_file.close().unwrap();
+        remote_file.wait_close().unwrap();
     }
 }
 
