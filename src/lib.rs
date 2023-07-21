@@ -220,6 +220,16 @@ impl Display for SshCommand {
     }
 }
 
+trait Scp {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self;
+}
+
 #[derive(Debug)]
 struct ScpFileDownload {
     address: std::net::Ipv4Addr,
@@ -227,6 +237,24 @@ struct ScpFileDownload {
     password: String,
     remote_path: PathBuf,
     local_path: PathBuf,
+}
+
+impl Scp for ScpFileDownload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        ScpFileDownload {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
 }
 
 impl Task for ScpFileDownload {
@@ -258,6 +286,50 @@ impl Task for ScpFileDownload {
 }
 
 impl Display for ScpFileDownload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+#[derive(Debug)]
+struct ScpFileUpload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl Scp for ScpFileUpload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        ScpFileUpload {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Task for ScpFileUpload {
+    fn execute(&self) {
+        todo!()
+    }
+}
+
+impl Display for ScpFileUpload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
