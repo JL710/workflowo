@@ -7,6 +7,12 @@ The configuration of pipelines is in a yaml file. There are Jobs located that ca
 Be careful when executing workflowo jobs from others. They may contain malicious code!
 
 
+## Installation
+```
+cargo install --git https://github.com/JL710/workflowo
+```
+> Cargo/Rust needs to be installed => https://www.rust-lang.org/tools/install
+
 ## Jobs
 Jobs are the largest abstraction layer. 
 A Job has children. 
