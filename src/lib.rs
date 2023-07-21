@@ -120,7 +120,7 @@ impl Display for Cmd {
 }
 
 #[derive(Debug)]
-pub enum OS {
+enum OS {
     Windows,
     Linux,
 }
