@@ -1,4 +1,7 @@
-use crate::{Bash, Cmd, Job, OSDependent, ScpFileDownload, ShellCommand, SshCommand, Task, OS};
+use crate::{
+    Bash, Cmd, Job, OSDependent, Scp, ScpFileDownload, ScpFileUpload, ShellCommand, SshCommand,
+    Task, OS,
+};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
@@ -175,7 +178,16 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
-            "scp-download" => match parse_scp_file_download(task_value) {
+            "scp-download" => match parse_scp::<ScpFileDownload>(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in ssh: {}",
+                        error
+                    )))
+                }
+            },
+            "scp-upload" => match parse_scp::<ScpFileUpload>(task_value) {
                 Ok(task) => return Ok(Box::new(task)),
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
@@ -191,7 +203,7 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
     Err(ParsingError::new("Task could not be parsed"))
 }
 
-fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingError> {
+fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     if !value.is_mapping() {
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
@@ -255,13 +267,7 @@ fn parse_scp_file_download(value: &Value) -> Result<ScpFileDownload, ParsingErro
         _ => return Err(ParsingError::new("local_path is not given")),
     };
 
-    Ok(ScpFileDownload {
-        address,
-        user: username,
-        password,
-        remote_path,
-        local_path,
-    })
+    Ok(T::new(address, username, password, remote_path, local_path))
 }
 
 fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
