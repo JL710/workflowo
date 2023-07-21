@@ -220,6 +220,16 @@ impl Display for SshCommand {
     }
 }
 
+trait Scp {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self;
+}
+
 #[derive(Debug)]
 struct ScpFileDownload {
     address: std::net::Ipv4Addr,
@@ -227,6 +237,24 @@ struct ScpFileDownload {
     password: String,
     remote_path: PathBuf,
     local_path: PathBuf,
+}
+
+impl Scp for ScpFileDownload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        ScpFileDownload {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
 }
 
 impl Task for ScpFileDownload {
@@ -258,6 +286,72 @@ impl Task for ScpFileDownload {
 }
 
 impl Display for ScpFileDownload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+#[derive(Debug)]
+struct ScpFileUpload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl Scp for ScpFileUpload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        ScpFileUpload {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Task for ScpFileUpload {
+    fn execute(&self) {
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        // read file
+        let mut file = std::fs::File::open(&self.local_path).unwrap();
+        let mut content = Vec::new();
+        file.read_to_end(&mut content).unwrap();
+
+        // upload file
+        let mut remote_file = session.scp_send(&self.remote_path, 0o644, content.len() as u64, None).unwrap();
+        remote_file.write_all(&content).unwrap();
+
+        // close channel and wait for the content to be transferred
+        remote_file.send_eof().unwrap();
+        remote_file.wait_eof().unwrap();
+        remote_file.close().unwrap();
+        remote_file.wait_close().unwrap();
+    }
+}
+
+impl Display for ScpFileUpload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
