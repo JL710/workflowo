@@ -5,9 +5,50 @@ use crate::{
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
+use std::io::Write;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
+
+fn parse_string(value: &Value) -> Result<String, ParsingError> {
+    match value {
+        Value::String(content) => Ok(content.to_owned()),
+        Value::Tagged(tagged) => {
+            if tagged.tag == "Input" {
+                match parse_string(&tagged.value) {
+                    Ok(v) => {
+                        print!("{}", v);
+                        std::io::stdout().flush().unwrap();
+                        let mut input = String::new();
+                        std::io::stdin().read_line(&mut input).unwrap();
+                        return Ok(input);
+                    }
+                    _ => return Err(ParsingError::new("Input prompt is not a valid string")),
+                }
+            }
+            if tagged.tag == "StrF" {
+                if !tagged.value.is_sequence() {
+                    return Err(ParsingError::new(
+                        "StringF needs to be a sequence of Strings",
+                    ));
+                }
+                let mut formatted_string = String::new();
+                for v in tagged.value.as_sequence().unwrap() {
+                    if let Ok(v_string) = parse_string(v) {
+                        formatted_string += &v_string;
+                    } else {
+                        return Err(ParsingError::new(
+                            "StringF needs to be a sequence of strings",
+                        ));
+                    }
+                }
+                return Ok(formatted_string);
+            }
+            Err(ParsingError::new("Not a valid !Tag for type string"))
+        }
+        _ => Err(ParsingError::new("Could not parse a valid string")),
+    }
+}
 
 /// Gets an entry out of a map.
 fn get_entry(map: &Mapping, key: Value) -> Option<Value> {
@@ -213,8 +254,8 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
 }
 
 fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
-    match value {
-        serde_yaml::Value::String(prompt) => Ok(PrintTask {
+    match parse_string(value) {
+        Ok(prompt) => Ok(PrintTask {
             prompt: prompt.to_owned(),
         }),
         _ => Err(ParsingError::new("print value is not a string")),
@@ -227,61 +268,51 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("username is not a string"));
-            }
-            value.as_str().unwrap().to_string()
-        }
+        Some(value) => match parse_string(&value) {
+            Ok(string) => string,
+            _ => return Err(ParsingError::new("username is not a string")),
+        },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("password is not a string"));
-            }
-            value.as_str().unwrap().to_string()
-        }
+        Some(value) => match parse_string(&value) {
+            Ok(string) => string,
+            _ => return Err(ParsingError::new("password is not a string")),
+        },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("address is not a string"));
-            }
-            match Ipv4Addr::from_str(value.as_str().unwrap()) {
+        Some(value) => match parse_string(&value) {
+            Ok(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
-            }
-        }
+            },
+            _ => return Err(ParsingError::new("address is not a string")),
+        },
         _ => return Err(ParsingError::new("address is not given")),
     };
 
     let remote_path = match get_entry(value.as_mapping().unwrap(), "remote_path".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("remote_path is not a string"));
-            }
-            match std::path::PathBuf::from_str(value.as_str().unwrap()) {
+        Some(value) => match parse_string(&value) {
+            Ok(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
-            }
-        }
+            },
+            _ => return Err(ParsingError::new("remote_path is not a string")),
+        },
         _ => return Err(ParsingError::new("remote_path is not given")),
     };
 
     let local_path = match get_entry(value.as_mapping().unwrap(), "local_path".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("local_path is not a string"));
-            }
-            match std::path::PathBuf::from_str(value.as_str().unwrap()) {
+        Some(value) => match parse_string(&value) {
+            Ok(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
-            }
-        }
+            },
+            _ => return Err(ParsingError::new("local_path is not a string")),
+        },
         _ => return Err(ParsingError::new("local_path is not given")),
     };
 
@@ -294,35 +325,29 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("username is not a string"));
-            }
-            value.as_str().unwrap().to_string()
-        }
+        Some(value) => match parse_string(&value) {
+            Ok(string) => string,
+            _ => return Err(ParsingError::new("username is not a string")),
+        },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("password is not a string"));
-            }
-            value.as_str().unwrap().to_string()
-        }
+        Some(value) => match parse_string(&value) {
+            Ok(string) => string,
+            _ => return Err(ParsingError::new("password is not a string")),
+        },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => {
-            if !value.is_string() {
-                return Err(ParsingError::new("address is not a string"));
-            }
-            match Ipv4Addr::from_str(value.as_str().unwrap()) {
+        Some(value) => match parse_string(&value) {
+            Ok(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
-            }
-        }
+            },
+            _ => return Err(ParsingError::new("address is not a string")),
+        },
         _ => return Err(ParsingError::new("address is not given")),
     };
 
@@ -338,13 +363,15 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
 
     let mut commands = Vec::new();
     for item in command_sequence {
-        if !item.is_string() {
-            return Err(ParsingError::from_string(format!(
-                "command is not a string: {:?}",
-                item
-            )));
+        match parse_string(&item) {
+            Ok(string) => commands.push(string),
+            _ => {
+                return Err(ParsingError::from_string(format!(
+                    "command is not a string: {:?}",
+                    item
+                )))
+            }
         }
-        commands.push(item.as_str().unwrap().to_owned());
     }
 
     Ok(SshCommand {
@@ -385,36 +412,56 @@ fn parse_os_dependent(
 
 fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, ParsingError> {
     match value {
-        Value::String(content) => {
+        Value::Mapping(cmd_map) => {
+            let command_value = match get_entry(cmd_map, "command".into()) {
+                Some(entry) => match parse_string(&entry) {
+                    Ok(string) => string,
+                    Err(error) => {
+                        return Err(ParsingError::from_string(format!(
+                            "command is not a valid string: {}",
+                            error
+                        )))
+                    }
+                },
+                _ => return Err(ParsingError::new("command is not given")),
+            };
+
+            let work_dir_value = match get_entry(cmd_map, "work_dir".into()) {
+                Some(entry) => match parse_string(&entry) {
+                    Ok(string) => Some(string),
+                    Err(error) => {
+                        return Err(ParsingError::from_string(format!(
+                            "command is not a valid string: {}",
+                            error
+                        )))
+                    }
+                },
+                _ => None,
+            };
+
             return Ok(T::new(
-                content
+                command_value
                     .split(' ')
                     .into_iter()
                     .map(|x| x.to_string())
                     .collect(),
-                None,
+                work_dir_value,
             ));
         }
-        Value::Mapping(cmd_map) => {
-            let command_value = get_entry(cmd_map, "command".into())
-                .map(|value: Value| value.as_str().unwrap().to_string());
-            let work_dir_value = get_entry(cmd_map, "work_dir".into())
-                .map(|value| value.as_str().unwrap().to_string());
-
-            if let Some(value) = command_value {
+        val => match parse_string(val) {
+            // case it is just the string shortcut `bash: "somestring"`
+            Ok(string) => {
                 return Ok(T::new(
-                    value
+                    string
                         .split(' ')
                         .into_iter()
                         .map(|x| x.to_string())
                         .collect(),
-                    work_dir_value,
+                    None,
                 ));
-            } else {
-                Err(ParsingError::new("Command not given"))
             }
-        }
-        _ => Err(ParsingError::new("task has a problem with its definition")),
+            _ => Err(ParsingError::new("task has a problem with its definition")),
+        },
     }
 }
 
