@@ -111,11 +111,29 @@ example_job:
   - print: "Hello World!"
 ```
 
+
 ## IGNORE
 Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section. 
 
 Could be useful to define secrets(passwords etc.) once and use it anywhere.
-````yaml
+```yaml
 IGNORE:
     whatever_you_do_here_will_be_ignored
 ```
+
+
+## Custom Types
+### !StrF
+```yaml
+!StrF ["Hello ", "World!"]
+```
+Formats to:
+```yaml
+"Hello World!"
+```
+
+### !Input
+```yaml
+!Input "Enter Something: "
+```
+Asks via command line for an input. The input will be used as the value.
