@@ -276,9 +276,7 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
 
 fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
     match parse_string(value) {
-        Ok(prompt) => Ok(PrintTask {
-            prompt: prompt.to_owned(),
-        }),
+        Ok(prompt) => Ok(PrintTask { prompt }),
         _ => Err(ParsingError::new("print value is not a string")),
     }
 }
