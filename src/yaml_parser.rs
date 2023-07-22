@@ -50,6 +50,7 @@ fn parse_string(value: &Value) -> Result<String, ParsingError> {
     }
 }
 
+/// resolves all tagged values to strings using `parse_string`
 fn render(value: &mut Value) {
     match value {
         Value::Mapping(map) => {
