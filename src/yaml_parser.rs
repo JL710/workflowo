@@ -21,6 +21,8 @@ fn parse_string(value: &Value) -> Result<String, ParsingError> {
                         std::io::stdout().flush().unwrap();
                         let mut input = String::new();
                         std::io::stdin().read_line(&mut input).unwrap();
+                        input.remove(input.len()-1);
+                        input.remove(input.len()-1);
                         return Ok(input);
                     }
                     _ => return Err(ParsingError::new("Input prompt is not a valid string")),
