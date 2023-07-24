@@ -54,16 +54,16 @@ fn parse_string(value: &Value) -> Result<String, ParsingError> {
 }
 
 /// resolves all tagged values to strings using `parse_string`
-fn render(value: &mut Value) {
+fn render(ids: &mut std::collections::HashMap<String, Value>, value: &mut Value) {
     match value {
         Value::Mapping(map) => {
             for map_value in map.values_mut() {
-                render(map_value);
+                render(ids, map_value);
             }
         }
         Value::Sequence(seq) => {
             for item in seq {
-                render(item);
+                render(ids, item);
             }
         }
         Value::Tagged(tagged) => {
@@ -483,7 +483,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
 /// Parses the file and returns a vector of the found jobs.
 pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
     let mut value = read_yaml_file(path);
-    render(&mut value); // pre render everything
+    render(&mut std::collections::HashMap::new(), &mut value); // pre render everything
     parse_jobs(value.as_mapping().unwrap().to_owned())
 }
 
@@ -495,5 +495,48 @@ mod tests {
         let content = "!StrF ['test', 'testa']";
         let value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
         assert_eq!("testtesta", parse_string(&value).unwrap());
+    }
+
+    #[test]
+    fn render_test() {
+        use crate::yaml_parser::{get_entry, render};
+        let content = "
+        key1: !StrF ['test', 'testa']
+        key2:
+            - !StrF ['test', 'testa']
+        key3:
+            key3-1:
+                - !StrF ['test', 'testa']
+        ";
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key1".into())
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key2".into())
+            .unwrap()
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .nth(0)
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(
+            get_entry(&value.as_mapping().unwrap(), "key3".into())
+                .unwrap()
+                .as_mapping()
+                .unwrap(),
+            "key3-1".into()
+        )
+        .unwrap()
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .nth(0)
+        .unwrap()
+        .is_string())
     }
 }
