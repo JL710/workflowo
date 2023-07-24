@@ -37,6 +37,14 @@ fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value
                     input.remove(input.len() - 1);
                 }
                 std::mem::swap(value, &mut Value::String(input));
+            } else if tagged.tag == "HiddenInput" {
+                render(_ids, &mut tagged.value);
+                if !tagged.value.is_string() {
+                    panic!("HiddenInput prompt is not a valid string")
+                }
+                let input = rpassword::prompt_password(tagged.value.as_str().unwrap())
+                    .expect("rpassword input failed");
+                std::mem::swap(value, &mut Value::String(input));
             } else if tagged.tag == "StrF" {
                 if !tagged.value.is_sequence() {
                     panic!("StringF needs to be a sequence of Strings",);
