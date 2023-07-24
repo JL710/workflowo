@@ -7,7 +7,9 @@ fn main() {
 
     let jobs = yaml_parser::jobs_from_file(args.file);
     for job in &jobs {
-        println!("{}", job);
+        if args.verbose {
+            println!("{}", job);
+        }
         if job.name == args.job {
             println!("Executing Job {}", job.name);
             job.execute();
