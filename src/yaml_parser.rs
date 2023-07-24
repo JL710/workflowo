@@ -10,66 +10,49 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-fn parse_string(value: &Value) -> Result<String, ParsingError> {
-    match value {
-        Value::String(content) => Ok(content.to_owned()),
-        Value::Tagged(tagged) => {
-            if tagged.tag == "Input" {
-                match parse_string(&tagged.value) {
-                    Ok(v) => {
-                        print!("{}", v);
-                        std::io::stdout().flush().unwrap();
-                        let mut input = String::new();
-                        std::io::stdin().read_line(&mut input).unwrap();
-                        while input.ends_with('\n') || input.ends_with('\r') {
-                            input.remove(input.len() - 1);
-                        }
-                        return Ok(input);
-                    }
-                    _ => return Err(ParsingError::new("Input prompt is not a valid string")),
-                }
-            }
-            if tagged.tag == "StrF" {
-                if !tagged.value.is_sequence() {
-                    return Err(ParsingError::new(
-                        "StringF needs to be a sequence of Strings",
-                    ));
-                }
-                let mut formatted_string = String::new();
-                for v in tagged.value.as_sequence().unwrap() {
-                    if let Ok(v_string) = parse_string(v) {
-                        formatted_string += &v_string;
-                    } else {
-                        return Err(ParsingError::new(
-                            "StringF needs to be a sequence of strings",
-                        ));
-                    }
-                }
-                return Ok(formatted_string);
-            }
-            Err(ParsingError::new("Not a valid !Tag for type string"))
-        }
-        _ => Err(ParsingError::new("Could not parse a valid string")),
-    }
-}
-
-/// resolves all tagged values to strings using `parse_string`
-fn render(ids: &mut std::collections::HashMap<String, Value>, value: &mut Value) {
+/// resolves all tagged values recursively
+fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value) {
     match value {
         Value::Mapping(map) => {
             for map_value in map.values_mut() {
-                render(ids, map_value);
+                render(_ids, map_value);
             }
         }
         Value::Sequence(seq) => {
             for item in seq {
-                render(ids, item);
+                render(_ids, item);
             }
         }
         Value::Tagged(tagged) => {
-            let mut new_value =
-                Value::String(parse_string(&Value::Tagged(tagged.to_owned())).unwrap());
-            std::mem::swap(value, &mut new_value);
+            if tagged.tag == "Input" {
+                render(_ids, &mut tagged.value);
+                if !tagged.value.is_string() {
+                    panic!("Input prompt is not a valid string")
+                }
+                print!("{}", tagged.value.as_str().unwrap());
+                std::io::stdout().flush().unwrap();
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap();
+                while input.ends_with('\n') || input.ends_with('\r') {
+                    input.remove(input.len() - 1);
+                }
+                std::mem::swap(value, &mut Value::String(input));
+            } else if tagged.tag == "StrF" {
+                if !tagged.value.is_sequence() {
+                    panic!("StringF needs to be a sequence of Strings",);
+                }
+                let mut formatted_string = String::new();
+                for v in tagged.value.as_sequence().unwrap().to_owned().iter_mut() {
+                    render(_ids, v);
+                    if !v.is_string() {
+                        panic!("StringF needs to be a sequence of strings",);
+                    }
+                    formatted_string += v.as_str().unwrap();
+                }
+                std::mem::swap(value, &mut Value::String(formatted_string));
+            } else {
+                panic!("{} is not a valid tag", tagged.tag);
+            }
         }
         _ => {}
     }
@@ -491,10 +474,11 @@ pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
 mod tests {
     #[test]
     fn str_f_test() {
-        use crate::yaml_parser::parse_string;
+        use crate::yaml_parser::render;
         let content = "!StrF ['test', 'testa']";
-        let value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        assert_eq!("testtesta", parse_string(&value).unwrap());
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+        assert_eq!("testtesta", value.as_str().unwrap());
     }
 
     #[test]
