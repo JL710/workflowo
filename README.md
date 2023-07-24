@@ -137,3 +137,21 @@ Formats to:
 !Input "Enter Something: "
 ```
 Asks via command line for an input. The input will be used as the value.
+
+### Id
+Is able to be used on `!Input` Tags (on everything else as well). When using the yaml default, you have to input at every use. With `!Input` once.
+```yaml
+IGNORE:
+  - taken_input: &taken_input !Id ["taken_input", !Input "Input: "]
+
+example_job:
+  - print: *taken_input
+```
+or
+```yaml
+IGNORE:
+  - taken_input: &taken_input !Id { "id": "taken_input", "value": !Input "Input: " }
+
+example_job:
+  - print: *taken_input
+```
