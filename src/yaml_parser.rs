@@ -50,6 +50,47 @@ fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value
                     formatted_string += v.as_str().unwrap();
                 }
                 std::mem::swap(value, &mut Value::String(formatted_string));
+            } else if tagged.tag == "Id" {
+                let id = match &tagged.value {
+                    Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
+                        Some(id_value) => id_value
+                            .as_str()
+                            .expect("!Id tag id is not of type string")
+                            .to_owned(),
+                        _ => panic!("id key not given in id map"),
+                    },
+                    Value::Sequence(content_sequence) => {
+                        if content_sequence.is_empty() {
+                            panic!("!Id tag is missing its id");
+                        }
+                        content_sequence[0]
+                            .as_str()
+                            .expect("invalid !Id tag id value. Value is not a string.")
+                            .to_owned()
+                    }
+                    _ => panic!("!Id value needs to be a map or sequence!"),
+                };
+
+                let mut id_value = match &tagged.value {
+                    Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
+                        Some(id_value) => id_value,
+                        _ => panic!("id key not given in id map"),
+                    },
+                    Value::Sequence(content_sequence) => {
+                        if content_sequence.len() < 2 {
+                            panic!("!Id tag is missing its value");
+                        }
+                        content_sequence[1].to_owned()
+                    }
+                    _ => panic!("!Id value needs to be a map or sequence!"),
+                };
+
+                if _ids.contains_key(&id) {
+                    std::mem::swap(value, &mut _ids.get(&id).unwrap().to_owned());
+                } else {
+                    render(_ids, &mut id_value);
+                    _ids.insert(id, id_value);
+                }
             } else {
                 panic!("{} is not a valid tag", tagged.tag);
             }
@@ -266,7 +307,10 @@ fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
         Value::String(prompt) => Ok(PrintTask {
             prompt: prompt.to_string(),
         }),
-        _ => Err(ParsingError::new("print value is not a string")),
+        other => Err(ParsingError::from_string(format!(
+            "print value is not a string: {:?}",
+            other
+        ))),
     }
 }
 
