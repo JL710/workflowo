@@ -11,7 +11,7 @@ pub struct Args {
     pub job: String,
 
     #[arg(short, long)]
-    pub verbose: bool
+    pub verbose: bool,
 }
 
 /// Parses the cli arguments given to the program and validates them.

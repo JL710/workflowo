@@ -10,46 +10,92 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-fn parse_string(value: &Value) -> Result<String, ParsingError> {
+/// resolves all tagged values recursively
+fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value) {
     match value {
-        Value::String(content) => Ok(content.to_owned()),
+        Value::Mapping(map) => {
+            for map_value in map.values_mut() {
+                render(_ids, map_value);
+            }
+        }
+        Value::Sequence(seq) => {
+            for item in seq {
+                render(_ids, item);
+            }
+        }
         Value::Tagged(tagged) => {
             if tagged.tag == "Input" {
-                match parse_string(&tagged.value) {
-                    Ok(v) => {
-                        print!("{}", v);
-                        std::io::stdout().flush().unwrap();
-                        let mut input = String::new();
-                        std::io::stdin().read_line(&mut input).unwrap();
-                        while input.ends_with("\n") || input.ends_with("\r") {
-                            input.remove(input.len()-1);
-                        }
-                        return Ok(input);
-                    }
-                    _ => return Err(ParsingError::new("Input prompt is not a valid string")),
+                render(_ids, &mut tagged.value);
+                if !tagged.value.is_string() {
+                    panic!("Input prompt is not a valid string")
                 }
-            }
-            if tagged.tag == "StrF" {
+                print!("{}", tagged.value.as_str().unwrap());
+                std::io::stdout().flush().unwrap();
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap();
+                while input.ends_with('\n') || input.ends_with('\r') {
+                    input.remove(input.len() - 1);
+                }
+                std::mem::swap(value, &mut Value::String(input));
+            } else if tagged.tag == "StrF" {
                 if !tagged.value.is_sequence() {
-                    return Err(ParsingError::new(
-                        "StringF needs to be a sequence of Strings",
-                    ));
+                    panic!("StringF needs to be a sequence of Strings",);
                 }
                 let mut formatted_string = String::new();
-                for v in tagged.value.as_sequence().unwrap() {
-                    if let Ok(v_string) = parse_string(v) {
-                        formatted_string += &v_string;
-                    } else {
-                        return Err(ParsingError::new(
-                            "StringF needs to be a sequence of strings",
-                        ));
+                for v in tagged.value.as_sequence().unwrap().to_owned().iter_mut() {
+                    render(_ids, v);
+                    if !v.is_string() {
+                        panic!("StringF needs to be a sequence of strings",);
                     }
+                    formatted_string += v.as_str().unwrap();
                 }
-                return Ok(formatted_string);
+                std::mem::swap(value, &mut Value::String(formatted_string));
+            } else if tagged.tag == "Id" {
+                let id = match &tagged.value {
+                    Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
+                        Some(id_value) => id_value
+                            .as_str()
+                            .expect("!Id tag id is not of type string")
+                            .to_owned(),
+                        _ => panic!("id key not given in id map"),
+                    },
+                    Value::Sequence(content_sequence) => {
+                        if content_sequence.is_empty() {
+                            panic!("!Id tag is missing its id");
+                        }
+                        content_sequence[0]
+                            .as_str()
+                            .expect("invalid !Id tag id value. Value is not a string.")
+                            .to_owned()
+                    }
+                    _ => panic!("!Id value needs to be a map or sequence!"),
+                };
+
+                let mut id_value = match &tagged.value {
+                    Value::Mapping(content_map) => match get_entry(content_map, "value".into()) {
+                        Some(id_value) => id_value,
+                        _ => panic!("id key not given in id map"),
+                    },
+                    Value::Sequence(content_sequence) => {
+                        if content_sequence.len() < 2 {
+                            panic!("!Id tag is missing its value");
+                        }
+                        content_sequence[1].to_owned()
+                    }
+                    _ => panic!("!Id value needs to be a map or sequence!"),
+                };
+
+                if _ids.contains_key(&id) {
+                    std::mem::swap(value, &mut _ids.get(&id).unwrap().to_owned());
+                } else {
+                    render(_ids, &mut id_value);
+                    _ids.insert(id, id_value);
+                }
+            } else {
+                panic!("{} is not a valid tag", tagged.tag);
             }
-            Err(ParsingError::new("Not a valid !Tag for type string"))
         }
-        _ => Err(ParsingError::new("Could not parse a valid string")),
+        _ => {}
     }
 }
 
@@ -84,11 +130,11 @@ impl fmt::Display for ParsingError {
     }
 }
 
-fn read_yaml_file(path: PathBuf) -> Mapping {
+fn read_yaml_file(path: PathBuf) -> Value {
     let file = File::open(path).unwrap();
     let mut value: Value = serde_yaml::from_reader(file).unwrap();
     value.apply_merge().unwrap();
-    value.as_mapping().unwrap().to_owned()
+    value
 }
 
 fn parse_jobs(data: Mapping) -> Vec<Job> {
@@ -257,9 +303,14 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
 }
 
 fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
-    match parse_string(value) {
-        Ok(prompt) => Ok(PrintTask { prompt }),
-        _ => Err(ParsingError::new("print value is not a string")),
+    match value {
+        Value::String(prompt) => Ok(PrintTask {
+            prompt: prompt.to_string(),
+        }),
+        other => Err(ParsingError::from_string(format!(
+            "print value is not a string: {:?}",
+            other
+        ))),
     }
 }
 
@@ -269,24 +320,24 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("username is not a string")),
         },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("password is not a string")),
         },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match Ipv4Addr::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -296,8 +347,8 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     };
 
     let remote_path = match get_entry(value.as_mapping().unwrap(), "remote_path".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match std::path::PathBuf::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -307,8 +358,8 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     };
 
     let local_path = match get_entry(value.as_mapping().unwrap(), "local_path".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match std::path::PathBuf::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -326,24 +377,24 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("username is not a string")),
         },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("password is not a string")),
         },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match Ipv4Addr::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -364,8 +415,8 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
 
     let mut commands = Vec::new();
     for item in command_sequence {
-        match parse_string(&item) {
-            Ok(string) => commands.push(string),
+        match item {
+            Value::String(string) => commands.push(string),
             _ => {
                 return Err(ParsingError::from_string(format!(
                     "command is not a string: {:?}",
@@ -415,27 +466,17 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
     match value {
         Value::Mapping(cmd_map) => {
             let command_value = match get_entry(cmd_map, "command".into()) {
-                Some(entry) => match parse_string(&entry) {
-                    Ok(string) => string,
-                    Err(error) => {
-                        return Err(ParsingError::from_string(format!(
-                            "command is not a valid string: {}",
-                            error
-                        )))
-                    }
+                Some(entry) => match entry {
+                    Value::String(string) => string,
+                    _ => return Err(ParsingError::new("command is not a string")),
                 },
                 _ => return Err(ParsingError::new("command is not given")),
             };
 
             let work_dir_value = match get_entry(cmd_map, "work_dir".into()) {
-                Some(entry) => match parse_string(&entry) {
-                    Ok(string) => Some(string),
-                    Err(error) => {
-                        return Err(ParsingError::from_string(format!(
-                            "command is not a valid string: {}",
-                            error
-                        )))
-                    }
+                Some(entry) => match entry {
+                    Value::String(string) => Some(string),
+                    _ => return Err(ParsingError::new("command is not a string")),
                 },
                 _ => None,
             };
@@ -449,9 +490,9 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                 work_dir_value,
             ));
         }
-        val => match parse_string(val) {
+        val => match val {
             // case it is just the string shortcut `bash: "somestring"`
-            Ok(string) => {
+            Value::String(string) => {
                 return Ok(T::new(
                     string
                         .split(' ')
@@ -468,16 +509,62 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
 
 /// Parses the file and returns a vector of the found jobs.
 pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
-    parse_jobs(read_yaml_file(path))
+    let mut value = read_yaml_file(path);
+    render(&mut std::collections::HashMap::new(), &mut value); // pre render everything
+    parse_jobs(value.as_mapping().unwrap().to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn str_f_test() {
-        use crate::yaml_parser::parse_string;
+        use crate::yaml_parser::render;
         let content = "!StrF ['test', 'testa']";
-        let value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        assert_eq!("testtesta", parse_string(&value).unwrap());
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+        assert_eq!("testtesta", value.as_str().unwrap());
+    }
+
+    #[test]
+    fn render_test() {
+        use crate::yaml_parser::{get_entry, render};
+        let content = "
+        key1: !StrF ['test', 'testa']
+        key2:
+            - !StrF ['test', 'testa']
+        key3:
+            key3-1:
+                - !StrF ['test', 'testa']
+        ";
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key1".into())
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key2".into())
+            .unwrap()
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .nth(0)
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(
+            get_entry(&value.as_mapping().unwrap(), "key3".into())
+                .unwrap()
+                .as_mapping()
+                .unwrap(),
+            "key3-1".into()
+        )
+        .unwrap()
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .nth(0)
+        .unwrap()
+        .is_string())
     }
 }
