@@ -72,7 +72,7 @@ fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value
                 };
 
                 let mut id_value = match &tagged.value {
-                    Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
+                    Value::Mapping(content_map) => match get_entry(content_map, "value".into()) {
                         Some(id_value) => id_value,
                         _ => panic!("id key not given in id map"),
                     },
