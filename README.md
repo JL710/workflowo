@@ -136,6 +136,7 @@ Formats to:
 ```yaml
 !Input "Enter Something: "
 ```
+> use `!HiddenInput` to hide input
 Asks via command line for an input. The input will be used as the value.
 
 ### Id
