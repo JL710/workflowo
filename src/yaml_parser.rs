@@ -21,8 +21,8 @@ fn parse_string(value: &Value) -> Result<String, ParsingError> {
                         std::io::stdout().flush().unwrap();
                         let mut input = String::new();
                         std::io::stdin().read_line(&mut input).unwrap();
-                        while input.ends_with("\n") || input.ends_with("\r") {
-                            input.remove(input.len()-1);
+                        while input.ends_with('\n') || input.ends_with('\r') {
+                            input.remove(input.len() - 1);
                         }
                         return Ok(input);
                     }
@@ -50,6 +50,28 @@ fn parse_string(value: &Value) -> Result<String, ParsingError> {
             Err(ParsingError::new("Not a valid !Tag for type string"))
         }
         _ => Err(ParsingError::new("Could not parse a valid string")),
+    }
+}
+
+/// resolves all tagged values to strings using `parse_string`
+fn render(value: &mut Value) {
+    match value {
+        Value::Mapping(map) => {
+            for map_value in map.values_mut() {
+                render(map_value);
+            }
+        }
+        Value::Sequence(seq) => {
+            for item in seq {
+                render(item);
+            }
+        }
+        Value::Tagged(tagged) => {
+            let mut new_value =
+                Value::String(parse_string(&Value::Tagged(tagged.to_owned())).unwrap());
+            std::mem::swap(value, &mut new_value);
+        }
+        _ => {}
     }
 }
 
@@ -84,11 +106,11 @@ impl fmt::Display for ParsingError {
     }
 }
 
-fn read_yaml_file(path: PathBuf) -> Mapping {
+fn read_yaml_file(path: PathBuf) -> Value {
     let file = File::open(path).unwrap();
     let mut value: Value = serde_yaml::from_reader(file).unwrap();
     value.apply_merge().unwrap();
-    value.as_mapping().unwrap().to_owned()
+    value
 }
 
 fn parse_jobs(data: Mapping) -> Vec<Job> {
@@ -257,8 +279,10 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
 }
 
 fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
-    match parse_string(value) {
-        Ok(prompt) => Ok(PrintTask { prompt }),
+    match value {
+        Value::String(prompt) => Ok(PrintTask {
+            prompt: prompt.to_string(),
+        }),
         _ => Err(ParsingError::new("print value is not a string")),
     }
 }
@@ -269,24 +293,24 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("username is not a string")),
         },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("password is not a string")),
         },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match Ipv4Addr::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -296,8 +320,8 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     };
 
     let remote_path = match get_entry(value.as_mapping().unwrap(), "remote_path".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match std::path::PathBuf::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -307,8 +331,8 @@ fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
     };
 
     let local_path = match get_entry(value.as_mapping().unwrap(), "local_path".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match std::path::PathBuf::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match std::path::PathBuf::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -326,24 +350,24 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
     }
 
     let username = match get_entry(value.as_mapping().unwrap(), "username".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("username is not a string")),
         },
         _ => return Err(ParsingError::new("username is not given")),
     };
 
     let password = match get_entry(value.as_mapping().unwrap(), "password".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => string,
+        Some(value) => match value {
+            Value::String(string) => string,
             _ => return Err(ParsingError::new("password is not a string")),
         },
         _ => return Err(ParsingError::new("password is not given")),
     };
 
     let address = match get_entry(value.as_mapping().unwrap(), "address".into()) {
-        Some(value) => match parse_string(&value) {
-            Ok(string) => match Ipv4Addr::from_str(&string) {
+        Some(value) => match value {
+            Value::String(string) => match Ipv4Addr::from_str(&string) {
                 Ok(value) => value,
                 Err(error) => return Err(ParsingError::from_string(error.to_string())),
             },
@@ -364,8 +388,8 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
 
     let mut commands = Vec::new();
     for item in command_sequence {
-        match parse_string(&item) {
-            Ok(string) => commands.push(string),
+        match item {
+            Value::String(string) => commands.push(string),
             _ => {
                 return Err(ParsingError::from_string(format!(
                     "command is not a string: {:?}",
@@ -415,27 +439,17 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
     match value {
         Value::Mapping(cmd_map) => {
             let command_value = match get_entry(cmd_map, "command".into()) {
-                Some(entry) => match parse_string(&entry) {
-                    Ok(string) => string,
-                    Err(error) => {
-                        return Err(ParsingError::from_string(format!(
-                            "command is not a valid string: {}",
-                            error
-                        )))
-                    }
+                Some(entry) => match entry {
+                    Value::String(string) => string,
+                    _ => return Err(ParsingError::new("command is not a string")),
                 },
                 _ => return Err(ParsingError::new("command is not given")),
             };
 
             let work_dir_value = match get_entry(cmd_map, "work_dir".into()) {
-                Some(entry) => match parse_string(&entry) {
-                    Ok(string) => Some(string),
-                    Err(error) => {
-                        return Err(ParsingError::from_string(format!(
-                            "command is not a valid string: {}",
-                            error
-                        )))
-                    }
+                Some(entry) => match entry {
+                    Value::String(string) => Some(string),
+                    _ => return Err(ParsingError::new("command is not a string")),
                 },
                 _ => None,
             };
@@ -449,9 +463,9 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                 work_dir_value,
             ));
         }
-        val => match parse_string(val) {
+        val => match val {
             // case it is just the string shortcut `bash: "somestring"`
-            Ok(string) => {
+            Value::String(string) => {
                 return Ok(T::new(
                     string
                         .split(' ')
@@ -468,7 +482,9 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
 
 /// Parses the file and returns a vector of the found jobs.
 pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
-    parse_jobs(read_yaml_file(path))
+    let mut value = read_yaml_file(path);
+    render(&mut value); // pre render everything
+    parse_jobs(value.as_mapping().unwrap().to_owned())
 }
 
 #[cfg(test)]
