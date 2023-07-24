@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process;
 
 #[derive(Parser, Debug)]
+#[command(version)]
 pub struct Args {
     /// the configuration file
     pub file: PathBuf,
