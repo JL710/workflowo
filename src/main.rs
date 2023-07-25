@@ -1,6 +1,6 @@
 use workflowo::cli;
 use workflowo::yaml_parser;
-use workflowo::Task;
+use workflowo::tasks::Task;
 
 fn main() {
     let args = cli::parse_and_validate_args();

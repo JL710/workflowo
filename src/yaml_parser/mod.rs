@@ -1,4 +1,4 @@
-use crate::{
+use crate::tasks::{
     Bash, Cmd, Job, OSDependent, PrintTask, Scp, ScpFileDownload, ScpFileUpload, ShellCommand,
     SshCommand, Task, OS,
 };
@@ -184,14 +184,11 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job, ParsingError> {
         }
     };
 
-    let mut job = Job {
-        name: name.clone(),
-        children: Vec::new(),
-    };
+    let mut job = Job::new(name.clone());
 
     for child in job_sequence {
         match parse_task(root_map, child) {
-            Ok(task) => job.children.push(task),
+            Ok(task) => job.add_child(task),
             Err(error) => {
                 return Err(ParsingError::from_string(format!(
                     "Error while parsing job {}: {}",
@@ -312,9 +309,7 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
 
 fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
     match value {
-        Value::String(prompt) => Ok(PrintTask {
-            prompt: prompt.to_string(),
-        }),
+        Value::String(prompt) => Ok(PrintTask::new(prompt.to_string())),
         other => Err(ParsingError::from_string(format!(
             "print value is not a string: {:?}",
             other
@@ -434,12 +429,7 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
         }
     }
 
-    Ok(SshCommand {
-        address,
-        password,
-        user: username,
-        commands,
-    })
+    Ok(SshCommand::new(address, username, password, commands))
 }
 
 fn parse_os_dependent(
@@ -451,13 +441,10 @@ fn parse_os_dependent(
         return Err(ParsingError::new("value is not a sequence"));
     }
 
-    let mut task = OSDependent {
-        os,
-        children: Vec::new(),
-    };
+    let mut task = OSDependent::new(os);
     for child_item in value.as_sequence().unwrap() {
         match parse_task(root_map, child_item) {
-            Ok(child_task) => task.children.push(child_task),
+            Ok(child_task) => task.add_child(child_task),
             Err(error) => {
                 return Err(ParsingError::from_string(format!(
                     "could not parse child task for {}: {}",
