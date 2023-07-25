@@ -5,107 +5,10 @@ use crate::tasks::{
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
 use std::fs::File;
-use std::io::Write;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
-
-/// resolves all tagged values recursively
-fn render(_ids: &mut std::collections::HashMap<String, Value>, value: &mut Value) {
-    match value {
-        Value::Mapping(map) => {
-            for map_value in map.values_mut() {
-                render(_ids, map_value);
-            }
-        }
-        Value::Sequence(seq) => {
-            for item in seq {
-                render(_ids, item);
-            }
-        }
-        Value::Tagged(tagged) => {
-            if tagged.tag == "Input" {
-                render(_ids, &mut tagged.value);
-                if !tagged.value.is_string() {
-                    panic!("Input prompt is not a valid string")
-                }
-                print!("{}", tagged.value.as_str().unwrap());
-                std::io::stdout().flush().unwrap();
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input).unwrap();
-                while input.ends_with('\n') || input.ends_with('\r') {
-                    input.remove(input.len() - 1);
-                }
-                std::mem::swap(value, &mut Value::String(input));
-            } else if tagged.tag == "HiddenInput" {
-                render(_ids, &mut tagged.value);
-                if !tagged.value.is_string() {
-                    panic!("HiddenInput prompt is not a valid string")
-                }
-                let input = rpassword::prompt_password(tagged.value.as_str().unwrap())
-                    .expect("rpassword input failed");
-                std::mem::swap(value, &mut Value::String(input));
-            } else if tagged.tag == "StrF" {
-                if !tagged.value.is_sequence() {
-                    panic!("StringF needs to be a sequence of Strings",);
-                }
-                let mut formatted_string = String::new();
-                for v in tagged.value.as_sequence().unwrap().to_owned().iter_mut() {
-                    render(_ids, v);
-                    if !v.is_string() {
-                        panic!("StringF needs to be a sequence of strings",);
-                    }
-                    formatted_string += v.as_str().unwrap();
-                }
-                std::mem::swap(value, &mut Value::String(formatted_string));
-            } else if tagged.tag == "Id" {
-                let id = match &tagged.value {
-                    Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
-                        Some(id_value) => id_value
-                            .as_str()
-                            .expect("!Id tag id is not of type string")
-                            .to_owned(),
-                        _ => panic!("id key not given in id map"),
-                    },
-                    Value::Sequence(content_sequence) => {
-                        if content_sequence.is_empty() {
-                            panic!("!Id tag is missing its id");
-                        }
-                        content_sequence[0]
-                            .as_str()
-                            .expect("invalid !Id tag id value. Value is not a string.")
-                            .to_owned()
-                    }
-                    _ => panic!("!Id value needs to be a map or sequence!"),
-                };
-
-                let mut id_value = match &tagged.value {
-                    Value::Mapping(content_map) => match get_entry(content_map, "value".into()) {
-                        Some(id_value) => id_value,
-                        _ => panic!("id key not given in id map"),
-                    },
-                    Value::Sequence(content_sequence) => {
-                        if content_sequence.len() < 2 {
-                            panic!("!Id tag is missing its value");
-                        }
-                        content_sequence[1].to_owned()
-                    }
-                    _ => panic!("!Id value needs to be a map or sequence!"),
-                };
-
-                if _ids.contains_key(&id) {
-                    std::mem::swap(value, &mut _ids.get(&id).unwrap().to_owned());
-                } else {
-                    render(_ids, &mut id_value);
-                    _ids.insert(id, id_value);
-                }
-            } else {
-                panic!("{} is not a valid tag", tagged.tag);
-            }
-        }
-        _ => {}
-    }
-}
+mod render;
 
 /// Gets an entry out of a map.
 fn get_entry(map: &Mapping, key: Value) -> Option<Value> {
@@ -505,7 +408,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
 /// Parses the file and returns a vector of the found jobs.
 pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
     let mut value = read_yaml_file(path);
-    render(&mut std::collections::HashMap::new(), &mut value); // pre render everything
+    render::render(&mut std::collections::HashMap::new(), &mut value); // pre render everything
     parse_jobs(value.as_mapping().unwrap().to_owned())
 }
 
@@ -516,7 +419,7 @@ mod tests {
         use crate::yaml_parser::render;
         let content = "!StrF ['test', 'testa']";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render::render(&mut std::collections::HashMap::new(), &mut value);
         assert_eq!("testtesta", value.as_str().unwrap());
     }
 
@@ -532,7 +435,7 @@ mod tests {
                 - !StrF ['test', 'testa']
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render::render(&mut std::collections::HashMap::new(), &mut value);
 
         assert!(get_entry(&value.as_mapping().unwrap(), "key1".into())
             .unwrap()
