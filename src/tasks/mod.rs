@@ -1,9 +1,6 @@
-use std::{
-    env, fmt,
-    fmt::Display
-};
-pub mod ssh;
+use std::{env, fmt, fmt::Display};
 pub mod shell;
+pub mod ssh;
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.
