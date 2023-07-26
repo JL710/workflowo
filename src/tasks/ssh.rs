@@ -222,3 +222,47 @@ impl Display for ScpFileUpload {
         )
     }
 }
+
+#[derive(Debug)]
+pub struct SftpDownload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl RemoteTransfer for SftpDownload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        Self {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Task for SftpDownload {
+    fn execute(&self) {
+        todo!("execute not implemented for SftpDownload")
+    }
+}
+
+impl Display for SftpDownload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
