@@ -1,6 +1,6 @@
 use super::Task;
-use std::process::{self, Command};
 use std::fmt::{self, Display};
+use std::process::{self, Command};
 
 pub trait ShellCommand {
     fn new(args: Vec<String>, work_dir: Option<String>) -> Self;
