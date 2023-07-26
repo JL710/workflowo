@@ -18,10 +18,10 @@ pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) {
         }
         Value::Tagged(tagged) => {
             let mut new_value = match tagged.tag.to_string().as_str() {
-                "Input" => render_tag_input(_ids, &mut tagged.value),
-                "HiddenInput" => render_tag_hidden_input(_ids, &mut tagged.value),
-                "StrF" => render_tag_strf(_ids, &tagged.value),
-                "Id" => render_tag_id(_ids, &mut tagged.value),
+                "!Input" => render_tag_input(_ids, &mut tagged.value),
+                "!HiddenInput" => render_tag_hidden_input(_ids, &mut tagged.value),
+                "!StrF" => render_tag_strf(_ids, &tagged.value),
+                "!Id" => render_tag_id(_ids, &mut tagged.value),
                 _ => panic!("{} is not a valid tag", tagged.tag),
             };
             std::mem::swap(value, &mut new_value);
@@ -126,8 +126,8 @@ mod tests {
 
     #[test]
     fn render_test() {
-        use super::render;
         use super::super::get_entry;
+        use super::render;
         let content = "
         key1: !StrF ['test', 'testa']
         key2:
