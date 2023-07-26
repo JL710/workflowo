@@ -125,6 +125,26 @@ mod tests {
     }
 
     #[test]
+    fn id_test() {
+        use super::super::get_entry;
+        use super::render;
+        let content = "
+        key1: !Id ['id', 'First Value']
+        key2: !Id ['id', 'Second Value']
+        ";
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+        // assert that at key2 the first value for the id `id` is used
+        assert_eq!(
+            "First Value",
+            get_entry(value.as_mapping().unwrap(), "key2".into())
+                .unwrap()
+                .as_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn render_test() {
         use super::super::get_entry;
         use super::render;
