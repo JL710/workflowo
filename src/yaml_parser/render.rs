@@ -112,3 +112,59 @@ fn render_tag_id(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Va
 
     _ids.get(&id).unwrap().to_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn str_f_test() {
+        use super::render;
+        let content = "!StrF ['test', 'testa']";
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+        assert_eq!("testtesta", value.as_str().unwrap());
+    }
+
+    #[test]
+    fn render_test() {
+        use super::render;
+        use super::super::get_entry;
+        let content = "
+        key1: !StrF ['test', 'testa']
+        key2:
+            - !StrF ['test', 'testa']
+        key3:
+            key3-1:
+                - !StrF ['test', 'testa']
+        ";
+        let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+        render(&mut std::collections::HashMap::new(), &mut value);
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key1".into())
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(&value.as_mapping().unwrap(), "key2".into())
+            .unwrap()
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .nth(0)
+            .unwrap()
+            .is_string());
+
+        assert!(get_entry(
+            get_entry(&value.as_mapping().unwrap(), "key3".into())
+                .unwrap()
+                .as_mapping()
+                .unwrap(),
+            "key3-1".into()
+        )
+        .unwrap()
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .nth(0)
+        .unwrap()
+        .is_string())
+    }
+}
