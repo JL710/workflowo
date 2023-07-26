@@ -3,7 +3,7 @@ use std::{
     fmt,
     fmt::Display,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug)]
@@ -285,8 +285,26 @@ impl Task for SftpDownload {
             } else {
                 download_sftp_file(&sftp, &self.local_path, &self.remote_path);
             }
+        } else if stat.is_dir() {
+            if self
+                .local_path
+                .join(self.remote_path.file_name().unwrap())
+                .is_dir()
+            {
+                panic!("Directory already exists");
+            }
+            std::fs::create_dir(self.local_path.join(self.remote_path.file_name().unwrap()))
+                .unwrap();
+            download_sftp_dir(
+                &sftp,
+                &self.local_path.join(self.remote_path.file_name().unwrap()),
+                &self.remote_path,
+            );
         } else {
-            todo!("Directory is not implemented");
+            panic!(
+                "Remote path {} does not exist",
+                self.remote_path.to_str().unwrap()
+            );
         }
     }
 }
@@ -302,13 +320,24 @@ impl Display for SftpDownload {
     }
 }
 
+fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    for (path, file_stat) in sftp.readdir(remote_path).unwrap() {
+        if file_stat.is_file() {
+            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path);
+        } else {
+            std::fs::create_dir(local_path.join(path.file_name().unwrap())).unwrap();
+            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path);
+        }
+    }
+}
+
 // will download a file via sftp -> assumes that the paths are valid
-fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &PathBuf, remote_path: &PathBuf) {
-    let mut remote_file = sftp.open(&remote_path).unwrap();
+fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    let mut remote_file = sftp.open(remote_path).unwrap();
 
     let mut contents = Vec::new();
     remote_file.read_to_end(&mut contents).unwrap();
 
-    let mut local_file = std::fs::File::create(&local_path).unwrap();
+    let mut local_file = std::fs::File::create(local_path).unwrap();
     local_file.write_all(&contents).unwrap();
 }
