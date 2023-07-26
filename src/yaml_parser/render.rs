@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn render_test() {
+    fn render_strf_nested_test() {
         use super::super::get_entry;
         use super::render;
         let content = "
