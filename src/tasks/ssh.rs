@@ -79,7 +79,7 @@ impl Display for SshCommand {
     }
 }
 
-pub trait Scp {
+pub trait RemoteTransfer {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -98,7 +98,7 @@ pub struct ScpFileDownload {
     local_path: PathBuf,
 }
 
-impl Scp for ScpFileDownload {
+impl RemoteTransfer for ScpFileDownload {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -164,7 +164,7 @@ pub struct ScpFileUpload {
     local_path: PathBuf,
 }
 
-impl Scp for ScpFileUpload {
+impl RemoteTransfer for ScpFileUpload {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,

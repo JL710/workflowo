@@ -1,5 +1,5 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
-use crate::tasks::ssh::{Scp, ScpFileDownload, ScpFileUpload, SshCommand};
+use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SshCommand};
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
@@ -219,7 +219,7 @@ fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
     }
 }
 
-fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
+fn parse_scp<T: RemoteTransfer>(value: &Value) -> Result<T, ParsingError> {
     if !value.is_mapping() {
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
