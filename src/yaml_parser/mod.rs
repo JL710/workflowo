@@ -1,5 +1,5 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
-use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SshCommand, SftpDownload};
+use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SshCommand};
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
