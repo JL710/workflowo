@@ -252,7 +252,42 @@ impl RemoteTransfer for SftpDownload {
 
 impl Task for SftpDownload {
     fn execute(&self) {
-        todo!("execute not implemented for SftpDownload")
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        let sftp = session.sftp().unwrap();
+
+        let stat = match sftp.stat(&self.remote_path) {
+            Ok(stat) => stat,
+            Err(error) => panic!(
+                "Error while getting stats of remote_path({}): {}",
+                &self.remote_path.to_str().unwrap(),
+                error
+            ),
+        };
+
+        if stat.is_file() {
+            if self.local_path.is_file() {
+                panic!("File {} already exists", &self.local_path.to_str().unwrap())
+            } else if self.local_path.is_dir() {
+                // use file name on remote as local file
+                download_sftp_file(
+                    &sftp,
+                    &self.local_path.join(self.remote_path.file_name().unwrap()),
+                    &self.remote_path,
+                );
+            } else {
+                download_sftp_file(&sftp, &self.local_path, &self.remote_path);
+            }
+        } else {
+            todo!("Directory is not implemented");
+        }
     }
 }
 
@@ -265,4 +300,15 @@ impl Display for SftpDownload {
                 .replace(&self.password, "***Not displayed for security reasons***")
         )
     }
+}
+
+// will download a file via sftp -> assumes that the paths are valid
+fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &PathBuf, remote_path: &PathBuf) {
+    let mut remote_file = sftp.open(&remote_path).unwrap();
+
+    let mut contents = Vec::new();
+    remote_file.read_to_end(&mut contents).unwrap();
+
+    let mut local_file = std::fs::File::create(&local_path).unwrap();
+    local_file.write_all(&contents).unwrap();
 }
