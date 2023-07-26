@@ -1,4 +1,4 @@
-use crate::yaml_parser::get_entry;
+use super::get_entry;
 use serde_yaml::{self, Value};
 use std::collections::HashMap;
 use std::io::Write;
