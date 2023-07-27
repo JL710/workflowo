@@ -123,6 +123,18 @@ example_job:
       local_path: "some_local_file.txt"
 ```
 
+### SFTP Upload
+With `sftp-upload` you can upload files or directories to a remote computer via sftp from your local.
+```yaml
+example_job:
+  - sftp-upload:
+      address: 192.128.114.12
+      username: "some_user"
+      password: "some_good_password"
+      remote_path: "/home/some_user/remote_file.txt"
+      local_path: "some_local_file.txt"
+```
+
 
 ## IGNORE
 Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section. 
