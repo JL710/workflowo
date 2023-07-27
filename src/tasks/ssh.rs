@@ -348,3 +348,113 @@ fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) 
     let mut local_file = std::fs::File::create(local_path).unwrap();
     local_file.write_all(&contents).unwrap();
 }
+
+#[derive(Debug)]
+pub struct SftpUpload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl RemoteTransfer for SftpUpload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        Self {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Display for SftpUpload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+impl Task for SftpUpload {
+    fn execute(&self) {
+        // check if local stuff is valid
+        if !self.local_path.is_dir() && !self.local_path.is_file() {
+            panic!("Local {} does not exists", {
+                self.local_path.to_str().unwrap()
+            });
+        }
+
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        let sftp = session.sftp().unwrap();
+
+        if self.local_path.is_file() {
+            upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
+        } else {
+            if sftp.stat(&self.remote_path).is_ok() {
+                panic!(
+                    "Remote path {} already exists",
+                    &self.remote_path.to_str().unwrap()
+                );
+            }
+            sftp.mkdir(&self.remote_path, 0o774)
+                .expect("Could not create dir");
+            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path);
+        }
+    }
+}
+
+fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    for dir_entry in std::fs::read_dir(local_path).unwrap() {
+        let dir_entry = dir_entry.unwrap();
+        if dir_entry.file_type().unwrap().is_file() {
+            upload_sftp_file(
+                sftp,
+                &dir_entry.path(),
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+            );
+        } else {
+            sftp.mkdir(
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+                0o774,
+            )
+            .expect("Error while creating directory");
+            upload_sftp_directory(
+                sftp,
+                &dir_entry.path(),
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+            );
+        }
+    }
+}
+
+// uploads a file via the sftp connection -> asserts the paths are valid
+fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    // read local file
+    let mut local_file = std::fs::File::open(local_path).unwrap();
+    let mut content = Vec::new();
+    local_file.read_to_end(&mut content).unwrap();
+
+    // write to remote file
+    let mut remote_file = sftp.create(remote_path).unwrap();
+    remote_file.write_all(&content).unwrap();
+}
