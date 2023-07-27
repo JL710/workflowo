@@ -3,7 +3,7 @@ use std::{
     fmt,
     fmt::Display,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug)]
@@ -79,7 +79,7 @@ impl Display for SshCommand {
     }
 }
 
-pub trait Scp {
+pub trait RemoteTransfer {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -98,7 +98,7 @@ pub struct ScpFileDownload {
     local_path: PathBuf,
 }
 
-impl Scp for ScpFileDownload {
+impl RemoteTransfer for ScpFileDownload {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -164,7 +164,7 @@ pub struct ScpFileUpload {
     local_path: PathBuf,
 }
 
-impl Scp for ScpFileUpload {
+impl RemoteTransfer for ScpFileUpload {
     fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -221,4 +221,130 @@ impl Display for ScpFileUpload {
                 .replace(&self.password, "***Not displayed for security reasons***")
         )
     }
+}
+
+#[derive(Debug)]
+pub struct SftpDownload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl RemoteTransfer for SftpDownload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        Self {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Task for SftpDownload {
+    fn execute(&self) {
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        let sftp = session.sftp().unwrap();
+
+        let stat = match sftp.stat(&self.remote_path) {
+            Ok(stat) => stat,
+            Err(error) => panic!(
+                "Error while getting stats of remote_path({}): {}",
+                &self.remote_path.to_str().unwrap(),
+                error
+            ),
+        };
+
+        if stat.is_file() {
+            if self.local_path.is_file() {
+                panic!("File {} already exists", &self.local_path.to_str().unwrap())
+            } else if self.local_path.is_dir() {
+                // use file name on remote as local file
+                download_sftp_file(
+                    &sftp,
+                    &self.local_path.join(self.remote_path.file_name().unwrap()),
+                    &self.remote_path,
+                );
+            } else {
+                download_sftp_file(&sftp, &self.local_path, &self.remote_path);
+            }
+        } else if stat.is_dir() {
+            // check if directory exists
+            if self
+                .local_path
+                .join(self.remote_path.file_name().unwrap())
+                .is_dir()
+            {
+                panic!("Directory already exists");
+            }
+            // check if parent directory exists
+            if !self.local_path.is_dir() {
+                panic!("Path {} does not exist", {
+                    self.local_path.to_str().unwrap()
+                });
+            }
+            std::fs::create_dir(self.local_path.join(self.remote_path.file_name().unwrap()))
+                .unwrap();
+            download_sftp_dir(
+                &sftp,
+                &self.local_path.join(self.remote_path.file_name().unwrap()),
+                &self.remote_path,
+            );
+        } else {
+            panic!(
+                "Remote path {} does not exist",
+                self.remote_path.to_str().unwrap()
+            );
+        }
+    }
+}
+
+impl Display for SftpDownload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    for (path, file_stat) in sftp.readdir(remote_path).unwrap() {
+        if file_stat.is_file() {
+            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path);
+        } else {
+            std::fs::create_dir(local_path.join(path.file_name().unwrap())).unwrap();
+            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path);
+        }
+    }
+}
+
+// will download a file via sftp -> assumes that the paths are valid
+fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    let mut remote_file = sftp.open(remote_path).unwrap();
+
+    let mut contents = Vec::new();
+    remote_file.read_to_end(&mut contents).unwrap();
+
+    let mut local_file = std::fs::File::create(local_path).unwrap();
+    local_file.write_all(&contents).unwrap();
 }
