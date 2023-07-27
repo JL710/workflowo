@@ -111,6 +111,18 @@ example_job:
   - print: "Hello World!"
 ```
 
+### SFTP Download
+With `sftp-download` you can download files or directories from a remote computer via sftp onto your local.
+```yaml
+example_job:
+  - sftp-upload:
+      address: 192.128.114.12
+      username: "some_user"
+      password: "some_good_password"
+      remote_path: "/home/some_user/remote_file.txt"
+      local_path: "some_local_file.txt"
+```
+
 
 ## IGNORE
 Sometimes you want to create content that should be ignored in the file. Therefore is the `IGNORE` section. 
