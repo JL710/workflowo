@@ -389,6 +389,39 @@ impl Display for SftpUpload {
 
 impl Task for SftpUpload {
     fn execute(&self) {
-        todo!("execute not implemented for SftpUpload")
+        // check if local stuff is valid
+        if !self.local_path.is_dir() && !self.local_path.is_file() {
+            panic!("Local {} does not exists", {
+                self.local_path.to_str().unwrap()
+            });
+        }
+
+        // create connection
+        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
+        let mut session = ssh2::Session::new().unwrap();
+        session.set_tcp_stream(tcp);
+        session.handshake().unwrap();
+        session
+            .userauth_password(&self.user, &self.password)
+            .unwrap();
+
+        let sftp = session.sftp().unwrap();
+
+        if self.local_path.is_file() {
+            upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
+        } else {
+            todo!("upload of directories is not implemented yet")
+        }
     }
+}
+
+// uploads a file via the sftp connection -> asserts the paths are valid
+fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    let mut local_file = std::fs::File::open(local_path).unwrap();
+    let mut content = Vec::new();
+    local_file.read_to_end(&mut content).unwrap();
+
+    // write to remote file
+    let mut remote_file = sftp.create(remote_path).unwrap();
+    remote_file.write_all(&content).unwrap();
 }
