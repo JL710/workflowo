@@ -348,3 +348,47 @@ fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) 
     let mut local_file = std::fs::File::create(local_path).unwrap();
     local_file.write_all(&contents).unwrap();
 }
+
+#[derive(Debug)]
+pub struct SftpUpload {
+    address: std::net::Ipv4Addr,
+    user: String,
+    password: String,
+    remote_path: PathBuf,
+    local_path: PathBuf,
+}
+
+impl RemoteTransfer for SftpUpload {
+    fn new(
+        address: std::net::Ipv4Addr,
+        user: String,
+        password: String,
+        remote_path: PathBuf,
+        local_path: PathBuf,
+    ) -> Self {
+        Self {
+            address,
+            user,
+            password,
+            remote_path,
+            local_path,
+        }
+    }
+}
+
+impl Display for SftpUpload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            format!("{:?}", self)
+                .replace(&self.password, "***Not displayed for security reasons***")
+        )
+    }
+}
+
+impl Task for SftpUpload {
+    fn execute(&self) {
+        todo!("execute not implemented for SftpUpload")
+    }
+}

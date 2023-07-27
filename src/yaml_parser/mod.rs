@@ -1,5 +1,5 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
-use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SshCommand};
+use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SshCommand, SftpUpload};
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
@@ -198,6 +198,15 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
                         "Parsing Error in sftp-download: {}",
+                        error
+                    )))
+                }
+            },
+            "sftp-upload" => match parse_remote_transfer::<SftpUpload>(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in sftp-upload: {}",
                         error
                     )))
                 }
