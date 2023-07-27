@@ -410,13 +410,46 @@ impl Task for SftpUpload {
         if self.local_path.is_file() {
             upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
         } else {
-            todo!("upload of directories is not implemented yet")
+            if sftp.stat(&self.remote_path).is_ok() {
+                panic!(
+                    "Remote path {} already exists",
+                    &self.remote_path.to_str().unwrap()
+                );
+            }
+            sftp.mkdir(&self.remote_path, 0o774)
+                .expect("Could not create dir");
+            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path);
+        }
+    }
+}
+
+fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    for dir_entry in std::fs::read_dir(local_path).unwrap() {
+        let dir_entry = dir_entry.unwrap();
+        if dir_entry.file_type().unwrap().is_file() {
+            upload_sftp_file(
+                sftp,
+                &dir_entry.path(),
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+            );
+        } else {
+            sftp.mkdir(
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+                0o774,
+            )
+            .expect("Error while creating directory");
+            upload_sftp_directory(
+                sftp,
+                &dir_entry.path(),
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+            );
         }
     }
 }
 
 // uploads a file via the sftp connection -> asserts the paths are valid
 fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+    // read local file
     let mut local_file = std::fs::File::open(local_path).unwrap();
     let mut content = Vec::new();
     local_file.read_to_end(&mut content).unwrap();
