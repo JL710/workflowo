@@ -1,5 +1,5 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
-use crate::tasks::ssh::{Scp, ScpFileDownload, ScpFileUpload, SshCommand};
+use crate::tasks::ssh::{RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SshCommand};
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
 use std::fmt;
@@ -175,7 +175,7 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
-            "scp-download" => match parse_scp::<ScpFileDownload>(task_value) {
+            "scp-download" => match parse_remote_transfer::<ScpFileDownload>(task_value) {
                 Ok(task) => return Ok(Box::new(task)),
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
@@ -184,11 +184,20 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>, Parsin
                     )))
                 }
             },
-            "scp-upload" => match parse_scp::<ScpFileUpload>(task_value) {
+            "scp-upload" => match parse_remote_transfer::<ScpFileUpload>(task_value) {
                 Ok(task) => return Ok(Box::new(task)),
                 Err(error) => {
                     return Err(ParsingError::from_string(format!(
                         "Parsing Error in scp-upload: {}",
+                        error
+                    )))
+                }
+            },
+            "sftp-download" => match parse_remote_transfer::<SftpDownload>(task_value) {
+                Ok(task) => return Ok(Box::new(task)),
+                Err(error) => {
+                    return Err(ParsingError::from_string(format!(
+                        "Parsing Error in sftp-download: {}",
                         error
                     )))
                 }
@@ -219,7 +228,7 @@ fn parse_print(value: &Value) -> Result<PrintTask, ParsingError> {
     }
 }
 
-fn parse_scp<T: Scp>(value: &Value) -> Result<T, ParsingError> {
+fn parse_remote_transfer<T: RemoteTransfer>(value: &Value) -> Result<T, ParsingError> {
     if !value.is_mapping() {
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
