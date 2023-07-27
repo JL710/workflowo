@@ -286,6 +286,7 @@ impl Task for SftpDownload {
                 download_sftp_file(&sftp, &self.local_path, &self.remote_path);
             }
         } else if stat.is_dir() {
+            // check if directory exists
             if self
                 .local_path
                 .join(self.remote_path.file_name().unwrap())
@@ -293,8 +294,11 @@ impl Task for SftpDownload {
             {
                 panic!("Directory already exists");
             }
+            // check if parent directory exists
             if !self.local_path.is_dir() {
-                panic!("Path {} does not exist", {self.local_path.to_str().unwrap()});
+                panic!("Path {} does not exist", {
+                    self.local_path.to_str().unwrap()
+                });
             }
             std::fs::create_dir(self.local_path.join(self.remote_path.file_name().unwrap()))
                 .unwrap();
