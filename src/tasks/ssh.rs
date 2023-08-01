@@ -1,4 +1,4 @@
-use super::{task_panic, Task, TaskError};
+use super::{task_error_panic, task_panic, Task, TaskError};
 use std::{
     fmt,
     fmt::Display,
@@ -11,10 +11,7 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
     let tcp = match std::net::TcpStream::connect(addr.to_string() + ":22") {
         Ok(tcp) => tcp,
         Err(error) => {
-            return Err(TaskError::from_error(
-                "Connecting failed".to_string(),
-                Box::new(error),
-            ))
+            task_error_panic!("Connecting failed", error);
         }
     };
     let mut session = ssh2::Session::new().unwrap();
@@ -23,10 +20,7 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
 
     // authenticate
     if let Err(error) = session.userauth_password(username, password) {
-        return Err(TaskError::from_error(
-            "Authentication failed".to_string(),
-            Box::new(error),
-        ));
+        task_error_panic!("Authentication failed", error);
     }
     Ok(session)
 }
@@ -266,13 +260,13 @@ impl Task for SftpDownload {
         let stat = match sftp.stat(&self.remote_path) {
             Ok(stat) => stat,
             Err(error) => {
-                return Err(TaskError::from_error(
+                task_error_panic!(
                     format!(
                         "Error while getting stats of remote_path({})",
                         &self.remote_path.to_str().unwrap()
                     ),
-                    Box::new(error),
-                ))
+                    error
+                );
             }
         };
 
