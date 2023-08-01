@@ -1,4 +1,4 @@
-use super::{Task, TaskError};
+use super::{task_panic, Task, TaskError};
 use std::{
     fmt,
     fmt::Display,
@@ -77,10 +77,10 @@ impl Task for SshCommand {
         for command in &self.commands {
             let (_stdout, exit_code) = execute_on_session(&sess, command);
             if exit_code != 0 {
-                return Err(TaskError::from_message(format!(
+                task_panic!(format!(
                     "Something went wrong while executing an command (`{}`). Exit code {}.",
                     command, exit_code
-                )));
+                ));
             }
         }
         Ok(())
@@ -278,10 +278,10 @@ impl Task for SftpDownload {
 
         if stat.is_file() {
             if self.local_path.is_file() {
-                return Err(TaskError::from_message(format!(
+                task_panic!(format!(
                     "File {} already exists",
                     &self.local_path.to_str().unwrap()
-                )));
+                ));
             } else if self.local_path.is_dir() {
                 // use file name on remote as local file
                 download_sftp_file(
@@ -295,24 +295,22 @@ impl Task for SftpDownload {
         } else if stat.is_dir() {
             // check if directory exists
             if self.local_path.is_dir() {
-                return Err(TaskError::from_message(
-                    "Directory already exists".to_string(),
-                ));
+                task_panic!("Directory already exists");
             }
             // check if parent directory exists
             if !self.local_path.parent().unwrap().is_dir() {
-                return Err(TaskError::from_message(format!(
+                task_panic!(format!(
                     "Path {} does not exist",
                     self.local_path.parent().unwrap().to_str().unwrap()
-                )));
+                ));
             }
             std::fs::create_dir(&self.local_path).unwrap();
             download_sftp_dir(&sftp, &self.local_path, &self.remote_path);
         } else {
-            return Err(TaskError::from_message(format!(
+            task_panic!(format!(
                 "Remote path {} does not exist",
                 self.remote_path.to_str().unwrap()
-            )));
+            ));
         }
         Ok(())
     }
@@ -408,10 +406,10 @@ impl Task for SftpUpload {
             upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
         } else {
             if sftp.stat(&self.remote_path).is_ok() {
-                return Err(TaskError::from_message(format!(
+                task_panic!(format!(
                     "Remote path {} already exists",
                     &self.remote_path.to_str().unwrap()
-                )));
+                ));
             }
             sftp.mkdir(&self.remote_path, 0o774)
                 .expect("Could not create dir");

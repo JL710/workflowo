@@ -2,6 +2,13 @@ use std::{env, fmt, fmt::Display};
 pub mod shell;
 pub mod ssh;
 
+macro_rules! task_panic {
+    ($message:expr) => {
+        return Err(TaskError::from_message($message.to_string()));
+    };
+}
+pub(crate) use task_panic;
+
 #[derive(Debug)]
 pub struct TaskError {
     message: String,
