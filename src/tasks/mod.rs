@@ -9,6 +9,17 @@ macro_rules! task_panic {
 }
 pub(crate) use task_panic;
 
+// task_error_panic("message", error)
+macro_rules! task_error_panic {
+    ($message:expr, $error:expr) => {
+        return Err(TaskError::from_error(
+            $message.to_string(),
+            Box::new($error),
+        ))
+    };
+}
+pub(crate) use task_error_panic;
+
 #[derive(Debug)]
 pub struct TaskError {
     message: String,
@@ -86,10 +97,10 @@ impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
         for child in self.children.iter() {
             if let Err(error) = child.execute() {
-                return Err(TaskError::new(
+                task_error_panic!(
                     format!("Child task of {} failed with {:?}", &self.name, error),
-                    Some(Box::new(error)),
-                ));
+                    error
+                );
             }
         }
         Ok(())
@@ -151,13 +162,13 @@ impl Task for OSDependent {
 
         for child in &self.children {
             if let Err(error) = child.execute() {
-                return Err(TaskError::new(
+                task_error_panic!(
                     format!(
                         "Child task of OsDependent {:?} failed with {:?}",
                         self.os, error
                     ),
-                    Some(Box::new(error)),
-                ));
+                    error
+                );
             }
         }
         Ok(())
