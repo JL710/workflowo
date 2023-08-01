@@ -1,4 +1,4 @@
-use super::{Task, TaskError};
+use super::{task_panic, Task, TaskError};
 use std::fmt::{self, Display};
 use std::process::Command;
 
@@ -32,11 +32,11 @@ impl Task for Bash {
             .output()
             .unwrap();
         if !output.status.success() {
-            return Err(TaskError::from_message(format!(
+            task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
-            )));
+            ));
         }
         Ok(())
     }
@@ -70,11 +70,11 @@ impl Task for Cmd {
 
         let output = command.arg("/c").args(&self.args).output().unwrap();
         if !output.status.success() {
-            return Err(TaskError::from_message(format!(
+            task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
-            )));
+            ));
         }
         Ok(())
     }
