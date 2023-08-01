@@ -1,10 +1,35 @@
-use super::Task;
+use super::{Task, TaskError};
 use std::{
     fmt,
     fmt::Display,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+
+fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Session, TaskError> {
+    // create connection with handshake etc.
+    let tcp = match std::net::TcpStream::connect(addr.to_string() + ":22") {
+        Ok(tcp) => tcp,
+        Err(error) => {
+            return Err(TaskError::from_error(
+                "Connecting failed".to_string(),
+                Box::new(error),
+            ))
+        }
+    };
+    let mut session = ssh2::Session::new().unwrap();
+    session.set_tcp_stream(tcp);
+    session.handshake().unwrap();
+
+    // authenticate
+    if let Err(error) = session.userauth_password(username, password) {
+        return Err(TaskError::from_error(
+            "Authentication failed".to_string(),
+            Box::new(error),
+        ));
+    }
+    Ok(session)
+}
 
 #[derive(Debug)]
 pub struct SshCommand {
@@ -45,26 +70,20 @@ fn execute_on_session(session: &ssh2::Session, command: &str) -> (String, i32) {
 }
 
 impl Task for SshCommand {
-    fn execute(&self) {
-        // create connection with handshake etc.
-        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
-        let mut sess = ssh2::Session::new().unwrap();
-        sess.set_tcp_stream(tcp);
-        sess.handshake().unwrap();
-
-        // authenticate
-        sess.userauth_password(&self.user, &self.password).unwrap();
+    fn execute(&self) -> Result<(), TaskError> {
+        let sess = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
         // execute command
         for command in &self.commands {
             let (_stdout, exit_code) = execute_on_session(&sess, command);
             if exit_code != 0 {
-                panic!(
+                return Err(TaskError::from_message(format!(
                     "Something went wrong while executing an command (`{}`). Exit code {}.",
                     command, exit_code
-                )
+                )));
             }
         }
+        Ok(())
     }
 }
 
@@ -117,15 +136,8 @@ impl RemoteTransfer for ScpFileDownload {
 }
 
 impl Task for ScpFileDownload {
-    fn execute(&self) {
-        // create connection
-        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
-        let mut session = ssh2::Session::new().unwrap();
-        session.set_tcp_stream(tcp);
-        session.handshake().unwrap();
-        session
-            .userauth_password(&self.user, &self.password)
-            .unwrap();
+    fn execute(&self) -> Result<(), TaskError> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
         // receive file
         let (mut remote_file, _stat) = session.scp_recv(&self.remote_path).unwrap();
@@ -141,6 +153,7 @@ impl Task for ScpFileDownload {
         // write content to local file
         let mut file = std::fs::File::create(&self.local_path).unwrap();
         file.write_all(&contents).unwrap();
+        Ok(())
     }
 }
 
@@ -183,15 +196,8 @@ impl RemoteTransfer for ScpFileUpload {
 }
 
 impl Task for ScpFileUpload {
-    fn execute(&self) {
-        // create connection
-        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
-        let mut session = ssh2::Session::new().unwrap();
-        session.set_tcp_stream(tcp);
-        session.handshake().unwrap();
-        session
-            .userauth_password(&self.user, &self.password)
-            .unwrap();
+    fn execute(&self) -> Result<(), TaskError> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
         // read file
         let mut file = std::fs::File::open(&self.local_path).unwrap();
@@ -209,6 +215,7 @@ impl Task for ScpFileUpload {
         remote_file.wait_eof().unwrap();
         remote_file.close().unwrap();
         remote_file.wait_close().unwrap();
+        Ok(())
     }
 }
 
@@ -251,30 +258,30 @@ impl RemoteTransfer for SftpDownload {
 }
 
 impl Task for SftpDownload {
-    fn execute(&self) {
-        // create connection
-        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
-        let mut session = ssh2::Session::new().unwrap();
-        session.set_tcp_stream(tcp);
-        session.handshake().unwrap();
-        session
-            .userauth_password(&self.user, &self.password)
-            .unwrap();
+    fn execute(&self) -> Result<(), TaskError> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
         let sftp = session.sftp().unwrap();
 
         let stat = match sftp.stat(&self.remote_path) {
             Ok(stat) => stat,
-            Err(error) => panic!(
-                "Error while getting stats of remote_path({}): {}",
-                &self.remote_path.to_str().unwrap(),
-                error
-            ),
+            Err(error) => {
+                return Err(TaskError::from_error(
+                    format!(
+                        "Error while getting stats of remote_path({})",
+                        &self.remote_path.to_str().unwrap()
+                    ),
+                    Box::new(error),
+                ))
+            }
         };
 
         if stat.is_file() {
             if self.local_path.is_file() {
-                panic!("File {} already exists", &self.local_path.to_str().unwrap())
+                return Err(TaskError::from_message(format!(
+                    "File {} already exists",
+                    &self.local_path.to_str().unwrap()
+                )));
             } else if self.local_path.is_dir() {
                 // use file name on remote as local file
                 download_sftp_file(
@@ -288,22 +295,26 @@ impl Task for SftpDownload {
         } else if stat.is_dir() {
             // check if directory exists
             if self.local_path.is_dir() {
-                panic!("Directory already exists");
+                return Err(TaskError::from_message(
+                    "Directory already exists".to_string(),
+                ));
             }
             // check if parent directory exists
             if !self.local_path.parent().unwrap().is_dir() {
-                panic!("Path {} does not exist", {
+                return Err(TaskError::from_message(format!(
+                    "Path {} does not exist",
                     self.local_path.parent().unwrap().to_str().unwrap()
-                });
+                )));
             }
             std::fs::create_dir(&self.local_path).unwrap();
             download_sftp_dir(&sftp, &self.local_path, &self.remote_path);
         } else {
-            panic!(
+            return Err(TaskError::from_message(format!(
                 "Remote path {} does not exist",
                 self.remote_path.to_str().unwrap()
-            );
+            )));
         }
+        Ok(())
     }
 }
 
@@ -318,6 +329,7 @@ impl Display for SftpDownload {
     }
 }
 
+// TODO: return result
 fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
     for (path, file_stat) in sftp.readdir(remote_path).unwrap() {
         if file_stat.is_file() {
@@ -330,6 +342,7 @@ fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
 }
 
 // will download a file via sftp -> assumes that the paths are valid
+// TODO: return result
 fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
     let mut remote_file = sftp.open(remote_path).unwrap();
 
@@ -379,7 +392,7 @@ impl Display for SftpUpload {
 }
 
 impl Task for SftpUpload {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         // check if local stuff is valid
         if !self.local_path.is_dir() && !self.local_path.is_file() {
             panic!("Local {} does not exists", {
@@ -387,14 +400,7 @@ impl Task for SftpUpload {
             });
         }
 
-        // create connection
-        let tcp = std::net::TcpStream::connect(self.address.to_string() + ":22").unwrap();
-        let mut session = ssh2::Session::new().unwrap();
-        session.set_tcp_stream(tcp);
-        session.handshake().unwrap();
-        session
-            .userauth_password(&self.user, &self.password)
-            .unwrap();
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
         let sftp = session.sftp().unwrap();
 
@@ -402,18 +408,20 @@ impl Task for SftpUpload {
             upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
         } else {
             if sftp.stat(&self.remote_path).is_ok() {
-                panic!(
+                return Err(TaskError::from_message(format!(
                     "Remote path {} already exists",
                     &self.remote_path.to_str().unwrap()
-                );
+                )));
             }
             sftp.mkdir(&self.remote_path, 0o774)
                 .expect("Could not create dir");
             upload_sftp_directory(&sftp, &self.local_path, &self.remote_path);
         }
+        Ok(())
     }
 }
 
+// TODO: return result
 fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
     for dir_entry in std::fs::read_dir(local_path).unwrap() {
         let dir_entry = dir_entry.unwrap();
@@ -439,6 +447,7 @@ fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Pat
 }
 
 // uploads a file via the sftp connection -> asserts the paths are valid
+// TODO: return result
 fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
     // read local file
     let mut local_file = std::fs::File::open(local_path).unwrap();
