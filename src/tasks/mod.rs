@@ -33,7 +33,11 @@ impl TaskError {
 
 impl Display for TaskError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TaskError {}. Source: {:?}", self.message, self.source_error)
+        write!(
+            f,
+            "TaskError {}. Source: {:?}",
+            self.message, self.source_error
+        )
     }
 }
 
@@ -46,11 +50,7 @@ impl From<Box<dyn std::error::Error>> for TaskError {
     }
 }
 
-impl std::error::Error for TaskError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.clone())
-    }
-}
+impl std::error::Error for TaskError {}
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.
@@ -78,8 +78,7 @@ impl Job {
 impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
         for child in self.children.iter() {
-            let result = child.execute();
-            if let Err(error) = result {
+            if let Err(error) = child.execute() {
                 return Err(TaskError::new(
                     format!("Child task of {} failed with {:?}", &self.name, error),
                     Some(Box::new(error)),
@@ -127,23 +126,34 @@ impl OSDependent {
 }
 
 impl Task for OSDependent {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         match self.os {
             OS::Windows => {
                 if env::consts::OS != "windows" {
-                    return;
+                    // return if not target os
+                    return Ok(());
                 }
             }
             OS::Linux => {
                 if env::consts::OS != "linux" {
-                    return;
+                    // return if not target os
+                    return Ok(());
                 }
             }
         }
 
         for child in &self.children {
-            child.execute();
+            if let Err(error) = child.execute() {
+                return Err(TaskError::new(
+                    format!(
+                        "Child task of OsDependent {:?} failed with {:?}",
+                        self.os, error
+                    ),
+                    Some(Box::new(error)),
+                ));
+            }
         }
+        Ok(())
     }
 }
 
@@ -171,8 +181,9 @@ impl PrintTask {
 }
 
 impl Task for PrintTask {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         println!("{}", self.prompt);
+        Ok(())
     }
 }
 

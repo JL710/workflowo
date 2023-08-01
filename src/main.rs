@@ -12,7 +12,9 @@ fn main() {
         }
         if job.name == args.job {
             println!("Executing Job {}", job.name);
-            job.execute();
+            if let Err(error) = job.execute() {
+                println!("Job failed: {}", error);
+            }
             return;
         }
     }
