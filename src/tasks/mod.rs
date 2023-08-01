@@ -2,9 +2,59 @@ use std::{env, fmt, fmt::Display};
 pub mod shell;
 pub mod ssh;
 
+#[derive(Debug)]
+pub struct TaskError {
+    message: String,
+    source_error: Option<Box<dyn std::error::Error>>,
+}
+
+impl TaskError {
+    fn new(message: String, source_error: Option<Box<dyn std::error::Error>>) -> Self {
+        Self {
+            message,
+            source_error,
+        }
+    }
+
+    fn from_error(message: String, source_error: Box<dyn std::error::Error>) -> Self {
+        Self {
+            message,
+            source_error: Some(source_error),
+        }
+    }
+
+    fn from_message(message: String) -> Self {
+        Self {
+            message,
+            source_error: None,
+        }
+    }
+}
+
+impl Display for TaskError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TaskError {}. Source: {:?}", self.message, self.source_error)
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for TaskError {
+    fn from(value: Box<dyn std::error::Error>) -> Self {
+        Self {
+            message: value.to_string(),
+            source_error: Some(value),
+        }
+    }
+}
+
+impl std::error::Error for TaskError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.clone())
+    }
+}
+
 pub trait Task: Display {
     /// Will be called when the task should be executed.
-    fn execute(&self);
+    fn execute(&self) -> Result<(), TaskError>;
 }
 
 pub struct Job {
@@ -26,10 +76,17 @@ impl Job {
 }
 
 impl Task for Job {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         for child in self.children.iter() {
-            child.execute();
+            let result = child.execute();
+            if let Err(error) = result {
+                return Err(TaskError::new(
+                    format!("Child task of {} failed with {:?}", &self.name, error),
+                    Some(Box::new(error)),
+                ));
+            }
         }
+        Ok(())
     }
 }
 
