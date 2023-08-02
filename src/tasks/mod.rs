@@ -2,6 +2,7 @@ use std::{env, fmt, fmt::Display};
 pub mod shell;
 pub mod ssh;
 
+/// task_panic!("Message") -> Result<(), TaskError>
 macro_rules! task_panic {
     ($message:expr) => {
         return Err(TaskError::from_message($message.to_string()));
@@ -9,7 +10,7 @@ macro_rules! task_panic {
 }
 pub(crate) use task_panic;
 
-// task_error_panic("message", error)
+/// task_error_panic!("message", error) -> Result<(), TaskError>
 macro_rules! task_error_panic {
     ($message:expr, $error:expr) => {
         return Err(TaskError::from_error(
@@ -19,6 +20,19 @@ macro_rules! task_error_panic {
     };
 }
 pub(crate) use task_error_panic;
+
+/// Will take a piece of code and a message.
+/// If the executed code returns Ok(value) the macro returns the value.
+/// If Err gets `returned task_error_panic` gets called with the message and the error.
+macro_rules! task_might_panic {
+    ($code:expr, $message:expr) => {
+        match $code {
+            Ok(value) => value,
+            Err(error) => task_error_panic!($message, error),
+        }
+    };
+}
+pub(crate) use task_might_panic;
 
 #[derive(Debug)]
 pub struct TaskError {
