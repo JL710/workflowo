@@ -1,4 +1,4 @@
-use super::{task_error_panic, task_panic, Task, TaskError};
+use super::{task_error_panic, task_might_panic, task_panic, Task, TaskError};
 use std::{
     fmt,
     fmt::Display,
@@ -255,7 +255,7 @@ impl Task for SftpDownload {
     fn execute(&self) -> Result<(), TaskError> {
         let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
-        let sftp = session.sftp().unwrap();
+        let sftp = task_might_panic!(session.sftp(), "Could not create sftp subsystem");
 
         let stat = match sftp.stat(&self.remote_path) {
             Ok(stat) => stat,
@@ -282,9 +282,9 @@ impl Task for SftpDownload {
                     &sftp,
                     &self.local_path.join(self.remote_path.file_name().unwrap()),
                     &self.remote_path,
-                );
+                )?;
             } else {
-                download_sftp_file(&sftp, &self.local_path, &self.remote_path);
+                download_sftp_file(&sftp, &self.local_path, &self.remote_path)?;
             }
         } else if stat.is_dir() {
             // check if directory exists
@@ -299,7 +299,7 @@ impl Task for SftpDownload {
                 ));
             }
             std::fs::create_dir(&self.local_path).unwrap();
-            download_sftp_dir(&sftp, &self.local_path, &self.remote_path);
+            download_sftp_dir(&sftp, &self.local_path, &self.remote_path)?;
         } else {
             task_panic!(format!(
                 "Remote path {} does not exist",
@@ -321,28 +321,48 @@ impl Display for SftpDownload {
     }
 }
 
-// TODO: return result
-fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+fn download_sftp_dir(
+    sftp: &ssh2::Sftp,
+    local_path: &Path,
+    remote_path: &Path,
+) -> Result<(), TaskError> {
     for (path, file_stat) in sftp.readdir(remote_path).unwrap() {
         if file_stat.is_file() {
-            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path);
+            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path)?;
         } else {
             std::fs::create_dir(local_path.join(path.file_name().unwrap())).unwrap();
-            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path);
+            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path)?;
         }
     }
+    Ok(())
 }
 
 // will download a file via sftp -> assumes that the paths are valid
-// TODO: return result
-fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
-    let mut remote_file = sftp.open(remote_path).unwrap();
+fn download_sftp_file(
+    sftp: &ssh2::Sftp,
+    local_path: &Path,
+    remote_path: &Path,
+) -> Result<(), TaskError> {
+    let mut remote_file = task_might_panic!(
+        sftp.open(remote_path),
+        format!("Could not open file {:?}", remote_path)
+    );
 
     let mut contents = Vec::new();
-    remote_file.read_to_end(&mut contents).unwrap();
+    task_might_panic!(
+        remote_file.read_to_end(&mut contents),
+        format!("Error while reading file {:?}", remote_path)
+    );
 
-    let mut local_file = std::fs::File::create(local_path).unwrap();
-    local_file.write_all(&contents).unwrap();
+    let mut local_file = task_might_panic!(
+        std::fs::File::create(local_path),
+        format!("Could not create local file {:?}", local_path)
+    );
+    task_might_panic!(
+        local_file.write_all(&contents),
+        format!("Error while writing to file {:?}", local_path)
+    );
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -394,10 +414,10 @@ impl Task for SftpUpload {
 
         let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
-        let sftp = session.sftp().unwrap();
+        let sftp = task_might_panic!(session.sftp(), "Could not create sftp subsystem");
 
         if self.local_path.is_file() {
-            upload_sftp_file(&sftp, &self.local_path, &self.remote_path);
+            upload_sftp_file(&sftp, &self.local_path, &self.remote_path)?;
         } else {
             if sftp.stat(&self.remote_path).is_ok() {
                 task_panic!(format!(
@@ -407,14 +427,17 @@ impl Task for SftpUpload {
             }
             sftp.mkdir(&self.remote_path, 0o774)
                 .expect("Could not create dir");
-            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path);
+            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path)?;
         }
         Ok(())
     }
 }
 
-// TODO: return result
-fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+fn upload_sftp_directory(
+    sftp: &ssh2::Sftp,
+    local_path: &Path,
+    remote_path: &Path,
+) -> Result<(), TaskError> {
     for dir_entry in std::fs::read_dir(local_path).unwrap() {
         let dir_entry = dir_entry.unwrap();
         if dir_entry.file_type().unwrap().is_file() {
@@ -422,31 +445,53 @@ fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Pat
                 sftp,
                 &dir_entry.path(),
                 &remote_path.join(dir_entry.path().file_name().unwrap()),
-            );
+            )?;
         } else {
-            sftp.mkdir(
-                &remote_path.join(dir_entry.path().file_name().unwrap()),
-                0o774,
-            )
-            .expect("Error while creating directory");
+            task_might_panic!(
+                sftp.mkdir(
+                    &remote_path.join(dir_entry.path().file_name().unwrap()),
+                    0o774,
+                ),
+                format!(
+                    "Error while creating directory {:?}",
+                    &remote_path.join(dir_entry.path().file_name().unwrap())
+                )
+            );
             upload_sftp_directory(
                 sftp,
                 &dir_entry.path(),
                 &remote_path.join(dir_entry.path().file_name().unwrap()),
-            );
+            )?;
         }
     }
+    Ok(())
 }
 
 // uploads a file via the sftp connection -> asserts the paths are valid
-// TODO: return result
-fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) {
+fn upload_sftp_file(
+    sftp: &ssh2::Sftp,
+    local_path: &Path,
+    remote_path: &Path,
+) -> Result<(), TaskError> {
     // read local file
-    let mut local_file = std::fs::File::open(local_path).unwrap();
+    let mut local_file = task_might_panic!(
+        std::fs::File::open(local_path),
+        format!("open local file failed {:?}", local_path)
+    );
     let mut content = Vec::new();
-    local_file.read_to_end(&mut content).unwrap();
+    task_might_panic!(
+        local_file.read_to_end(&mut content),
+        format!("error wile reading file {:?}", local_path)
+    );
 
     // write to remote file
-    let mut remote_file = sftp.create(remote_path).unwrap();
-    remote_file.write_all(&content).unwrap();
+    let mut remote_file = task_might_panic!(
+        sftp.create(remote_path),
+        format!("Could not open remote file {:?}", remote_path)
+    );
+    task_might_panic!(
+        remote_file.write_all(&content),
+        format!("Error while writing to file {:?}", remote_path)
+    );
+    Ok(())
 }
