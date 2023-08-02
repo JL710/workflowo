@@ -2,7 +2,10 @@ use std::{env, fmt, fmt::Display};
 pub mod shell;
 pub mod ssh;
 
-/// task_panic!("Message") -> Result<(), TaskError>
+/// Can be used in functions with return type `Result<(), TaskError>`.
+/// ```no_run
+/// task_panic!("Message");
+/// ```
 macro_rules! task_panic {
     ($message:expr) => {
         return Err(TaskError::from_message($message.to_string()));
@@ -10,7 +13,11 @@ macro_rules! task_panic {
 }
 pub(crate) use task_panic;
 
-/// task_error_panic!("message", error) -> Result<(), TaskError>
+/// Can be used in functions with return type `Result<(), TaskError>`.
+/// The `error` can be anything that implements the `std::error::Error` trait.
+/// ```no_run
+/// task_error_panic!("message", error);
+/// ```
 macro_rules! task_error_panic {
     ($message:expr, $error:expr) => {
         return Err(TaskError::from_error(
@@ -23,7 +30,12 @@ pub(crate) use task_error_panic;
 
 /// Will take a piece of code and a message.
 /// If the executed code returns Ok(value) the macro returns the value.
-/// If Err gets `returned task_error_panic` gets called with the message and the error.
+/// If Err gets returned `task_error_panic` gets called with the message and the error.
+/// 
+/// Can be used in functions with return type `Result<(), TaskError>`.
+/// ```no_run
+/// task_might_panic!(code_that_would_need_to_be_unwrapped, "Message");
+/// ```
 macro_rules! task_might_panic {
     ($code:expr, $message:expr) => {
         match $code {
