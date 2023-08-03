@@ -24,14 +24,14 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
 }
 
 #[derive(Debug)]
-pub struct SshCommand {
+pub struct SshTask {
     address: std::net::Ipv4Addr,
     user: String,
     password: String,
     commands: Vec<String>,
 }
 
-impl SshCommand {
+impl SshTask {
     pub fn new(
         address: std::net::Ipv4Addr,
         user: String,
@@ -67,7 +67,7 @@ fn execute_on_session(session: &ssh2::Session, command: &str) -> Result<(String,
     Ok((stdout, channel.exit_status().unwrap()))
 }
 
-impl Task for SshCommand {
+impl Task for SshTask {
     fn execute(&self) -> Result<(), TaskError> {
         let sess = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
@@ -85,7 +85,7 @@ impl Task for SshCommand {
     }
 }
 
-impl Display for SshCommand {
+impl Display for SshTask {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

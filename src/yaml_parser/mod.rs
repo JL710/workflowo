@@ -1,6 +1,6 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
 use crate::tasks::ssh::{
-    RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshCommand,
+    RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshTask,
 };
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
@@ -296,7 +296,7 @@ fn parse_remote_transfer<T: RemoteTransfer>(value: &Value) -> Result<T, ParsingE
     Ok(T::new(address, username, password, remote_path, local_path))
 }
 
-fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
+fn parse_ssh(value: &Value) -> Result<SshTask, ParsingError> {
     if !value.is_mapping() {
         return Err(ParsingError::new("Value is not of type Mapping"));
     }
@@ -351,7 +351,7 @@ fn parse_ssh(value: &Value) -> Result<SshCommand, ParsingError> {
         }
     }
 
-    Ok(SshCommand::new(address, username, password, commands))
+    Ok(SshTask::new(address, username, password, commands))
 }
 
 fn parse_os_dependent(
