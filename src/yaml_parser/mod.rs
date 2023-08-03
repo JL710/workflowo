@@ -1,6 +1,6 @@
 use crate::tasks::shell::{Bash, Cmd, ShellCommand};
 use crate::tasks::ssh::{
-    RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshTask,
+    RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshCommand, SshTask,
 };
 use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
 use serde_yaml::{self, Mapping, Value};
@@ -341,7 +341,7 @@ fn parse_ssh(value: &Value) -> Result<SshTask, ParsingError> {
     let mut commands = Vec::new();
     for item in command_sequence {
         match item {
-            Value::String(string) => commands.push(string),
+            Value::String(string) => commands.push(SshCommand::new(string, vec![0])),
             _ => {
                 return Err(ParsingError::from_string(format!(
                     "command is not a string: {:?}",
