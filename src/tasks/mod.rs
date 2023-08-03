@@ -3,7 +3,8 @@ pub mod shell;
 pub mod ssh;
 
 /// Can be used in functions with return type `Result<(), TaskError>`.
-/// ```no_run
+/// 
+/// ```ignore
 /// task_panic!("Message");
 /// ```
 macro_rules! task_panic {
@@ -15,7 +16,8 @@ pub(crate) use task_panic;
 
 /// Can be used in functions with return type `Result<(), TaskError>`.
 /// The `error` can be anything that implements the `std::error::Error` trait.
-/// ```no_run
+/// 
+/// ```ignore
 /// task_error_panic!("message", error);
 /// ```
 macro_rules! task_error_panic {
@@ -31,9 +33,10 @@ pub(crate) use task_error_panic;
 /// Will take a piece of code and a message.
 /// If the executed code returns Ok(value) the macro returns the value.
 /// If Err gets returned `task_error_panic` gets called with the message and the error.
-/// 
+///
 /// Can be used in functions with return type `Result<(), TaskError>`.
-/// ```no_run
+/// 
+/// ```ignore
 /// task_might_panic!(code_that_would_need_to_be_unwrapped, "Message");
 /// ```
 macro_rules! task_might_panic {
