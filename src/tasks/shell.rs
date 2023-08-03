@@ -1,4 +1,4 @@
-use super::{task_panic, Task, TaskError};
+use super::{task_error_panic, task_might_panic, task_panic, Task, TaskError};
 use std::fmt::{self, Display};
 use std::process::Command;
 
@@ -26,11 +26,10 @@ impl Task for Bash {
             command.current_dir(work_dir);
         }
 
-        let output = command
-            .arg("-c")
-            .arg(&self.args.join(" "))
-            .output()
-            .unwrap();
+        let output = task_might_panic!(
+            command.arg("-c").arg(&self.args.join(" ")).output(),
+            format!("Failed while executing bash command")
+        );
         if !output.status.success() {
             task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
@@ -68,7 +67,10 @@ impl Task for Cmd {
             command.current_dir(work_dir);
         }
 
-        let output = command.arg("/c").args(&self.args).output().unwrap();
+        let output = task_might_panic!(
+            command.arg("/c").args(&self.args).output(),
+            "Failed while cmd execution"
+        );
         if !output.status.success() {
             task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
