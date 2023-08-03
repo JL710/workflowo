@@ -1,6 +1,6 @@
-use super::Task;
+use super::{task_error_panic, task_might_panic, task_panic, Task, TaskError};
 use std::fmt::{self, Display};
-use std::process::{self, Command};
+use std::process::Command;
 
 pub trait ShellCommand {
     fn new(args: Vec<String>, work_dir: Option<String>) -> Self;
@@ -19,26 +19,25 @@ impl ShellCommand for Bash {
 }
 
 impl Task for Bash {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         let mut command = Command::new("bash");
 
         if let Some(work_dir) = &self.work_dir {
             command.current_dir(work_dir);
         }
 
-        let output = command
-            .arg("-c")
-            .arg(&self.args.join(" "))
-            .output()
-            .unwrap();
+        let output = task_might_panic!(
+            command.arg("-c").arg(&self.args.join(" ")).output(),
+            format!("Failed while executing bash command")
+        );
         if !output.status.success() {
-            println!(
+            task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
-            );
-            process::exit(-1)
+            ));
         }
+        Ok(())
     }
 }
 
@@ -61,22 +60,25 @@ impl ShellCommand for Cmd {
 }
 
 impl Task for Cmd {
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), TaskError> {
         let mut command = Command::new("cmd");
 
         if let Some(work_dir) = &self.work_dir {
             command.current_dir(work_dir);
         }
 
-        let output = command.arg("/c").args(&self.args).output().unwrap();
+        let output = task_might_panic!(
+            command.arg("/c").args(&self.args).output(),
+            "Failed while cmd execution"
+        );
         if !output.status.success() {
-            println!(
+            task_panic!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
-            );
-            process::exit(-1)
+            ));
         }
+        Ok(())
     }
 }
 
