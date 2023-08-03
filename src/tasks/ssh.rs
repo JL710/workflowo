@@ -23,12 +23,40 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
     Ok(session)
 }
 
+/// Holds one command with the allowed access codes for that specific command.
+#[derive(Debug)]
+pub struct SshCommand {
+    command: String,
+    allowed_exit_codes: Vec<i32>,
+}
+
+impl SshCommand {
+    pub fn new(command: String, allowed_exit_codes: Vec<i32>) -> Self {
+        Self {
+            command,
+            allowed_exit_codes,
+        }
+    }
+
+    fn execute(&self, session: &ssh2::Session) -> Result<(), TaskError> {
+        let (_stdout, exit_code) = execute_on_session(session, &self.command)?;
+        if !self.allowed_exit_codes.contains(&exit_code) {
+            task_panic!(format!(
+                "Something went wrong while executing an command (`{}`). Exit code {}.",
+                self.command, exit_code
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// A talks that holds [`SshCommand`]'s with the remote information and can execute them in order.
 #[derive(Debug)]
 pub struct SshTask {
     address: std::net::Ipv4Addr,
     user: String,
     password: String,
-    commands: Vec<String>,
+    commands: Vec<SshCommand>,
 }
 
 impl SshTask {
@@ -36,7 +64,7 @@ impl SshTask {
         address: std::net::Ipv4Addr,
         user: String,
         password: String,
-        commands: Vec<String>,
+        commands: Vec<SshCommand>,
     ) -> Self {
         Self {
             address,
@@ -47,7 +75,7 @@ impl SshTask {
     }
 }
 
-/// Executes a command on the `Session`. Returns a Tuple with the Prompt and exit code.
+/// Executes a command on the [`ssh2::Session`]. Returns a Tuple with the Prompt and exit code.
 fn execute_on_session(session: &ssh2::Session, command: &str) -> Result<(String, i32), TaskError> {
     let mut channel = session.channel_session().unwrap();
 
@@ -71,15 +99,9 @@ impl Task for SshTask {
     fn execute(&self) -> Result<(), TaskError> {
         let sess = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
 
-        // execute command
+        // execute commands
         for command in &self.commands {
-            let (_stdout, exit_code) = execute_on_session(&sess, command)?;
-            if exit_code != 0 {
-                task_panic!(format!(
-                    "Something went wrong while executing an command (`{}`). Exit code {}.",
-                    command, exit_code
-                ));
-            }
+            command.execute(&sess)?;
         }
         Ok(())
     }
