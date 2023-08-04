@@ -340,18 +340,20 @@ fn parse_ssh(value: &Value) -> Result<SshTask, ParsingError> {
 
     let mut commands = Vec::new();
     for item in command_sequence {
-        match item {
-            Value::String(string) => commands.push(SshCommand::new(string, vec![0])),
-            _ => {
-                return Err(ParsingError::from_string(format!(
-                    "command is not a string: {:?}",
-                    item
-                )))
-            }
-        }
+        commands.push(parse_ssh_command(&item)?);
     }
 
     Ok(SshTask::new(address, username, password, commands))
+}
+
+fn parse_ssh_command(value: &Value) -> Result<SshCommand, ParsingError> {
+    match value {
+        Value::String(string) => Ok(SshCommand::new(string.to_owned(), vec![0])),
+        _ => Err(ParsingError::from_string(format!(
+            "command is not a string: {:?}",
+            value
+        ))),
+    }
 }
 
 fn parse_os_dependent(
