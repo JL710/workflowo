@@ -24,7 +24,7 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
 }
 
 /// Holds one command with the allowed access codes for that specific command.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SshCommand {
     command: String,
     allowed_exit_codes: Vec<i32>,
