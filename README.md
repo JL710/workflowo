@@ -79,6 +79,14 @@ example_job:
         - "mkdir newly_created_directory"
         - "rmdir newly_created_directory"
 ```
+If you want to specify the allowed exit codes of a command you can use this representation (the default allowed exit code is 0):
+```yaml
+commands:
+  - "ls 1"
+  - command:
+      command: "ls 2"
+      exit_codes: [1, 2, 3]
+``` 
 
 ### SCP Download
 With the `scp-download` task you can download files from a remote computer via ssh onto your local.
