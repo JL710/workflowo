@@ -340,18 +340,74 @@ fn parse_ssh(value: &Value) -> Result<SshTask, ParsingError> {
 
     let mut commands = Vec::new();
     for item in command_sequence {
-        match item {
-            Value::String(string) => commands.push(SshCommand::new(string, vec![0])),
-            _ => {
-                return Err(ParsingError::from_string(format!(
-                    "command is not a string: {:?}",
-                    item
-                )))
-            }
-        }
+        commands.push(parse_ssh_command(&item)?);
     }
 
     Ok(SshTask::new(address, username, password, commands))
+}
+
+fn parse_ssh_command(value: &Value) -> Result<SshCommand, ParsingError> {
+    match value {
+        Value::String(string) => Ok(SshCommand::new(string.to_owned(), vec![0])),
+        Value::Mapping(map) => {
+            let command_map = match get_entry(map, "command".into()) {
+                Some(entry_value) => {
+                    if !entry_value.is_mapping() {
+                        return Err(ParsingError::new("Ssh command is not a map"));
+                    }
+                    entry_value.as_mapping().unwrap().to_owned()
+                }
+                _ => {
+                    return Err(ParsingError::new(
+                        "Ssh command has misleading key. Expected 'command'",
+                    ))
+                }
+            };
+            let command = match get_entry(&command_map, "command".into()) {
+                Some(command_entry) => {
+                    if !command_entry.is_string() {
+                        return Err(ParsingError::new("Ssh command is not a string"));
+                    }
+                    command_entry.as_str().unwrap().to_owned()
+                }
+                _ => {
+                    return Err(ParsingError::new(
+                        "Ssh command missing key. Expected 'command'",
+                    ))
+                }
+            };
+            let exit_codes_sequence = match get_entry(&command_map, "exit_codes".into()) {
+                Some(exit_codes_entry) => {
+                    if !exit_codes_entry.is_sequence() {
+                        return Err(ParsingError::new(
+                            "Ssh command exit_codes is not a sequence",
+                        ));
+                    }
+                    exit_codes_entry.as_sequence().unwrap().to_owned()
+                }
+                _ => {
+                    return Err(ParsingError::new(
+                        "Ssh command missing key. Expected 'command'",
+                    ))
+                }
+            };
+            let mut exit_codes: Vec<i32> = Vec::new();
+            for exit_code_value in exit_codes_sequence {
+                if !exit_code_value.is_number() {
+                    return Err(ParsingError::from_string(format!(
+                        "Ssh command exit_code {:?} is not a number",
+                        exit_code_value
+                    )));
+                }
+                exit_codes.push(exit_code_value.as_i64().unwrap() as i32);
+            }
+            Ok(SshCommand::new(command.to_string(), exit_codes))
+        }
+        _ => Err(ParsingError::from_string(format!(
+            "command is not a string: {:?}",
+            value
+        ))),
+    }
 }
 
 fn parse_os_dependent(
@@ -401,7 +457,6 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
             return Ok(T::new(
                 command_value
                     .split(' ')
-                    .into_iter()
                     .map(|x| x.to_string())
                     .collect(),
                 work_dir_value,
@@ -413,7 +468,6 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
                 return Ok(T::new(
                     string
                         .split(' ')
-                        .into_iter()
                         .map(|x| x.to_string())
                         .collect(),
                     None,
@@ -429,4 +483,41 @@ pub fn jobs_from_file(path: PathBuf) -> Vec<Job> {
     let mut value = read_yaml_file(path);
     render::render(&mut std::collections::HashMap::new(), &mut value); // pre render everything
     parse_jobs(value.as_mapping().unwrap().to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_yaml::Value;
+
+    use crate::{tasks::ssh::SshCommand, yaml_parser::parse_ssh_command};
+
+    #[test]
+    fn parse_ssh_command_test_simple() {
+        let value: Value = serde_yaml::from_str(
+            "
+        'ls 1'
+        ",
+        )
+        .unwrap();
+        assert_eq!(
+            parse_ssh_command(&value).unwrap(),
+            SshCommand::new("ls 1".to_string(), vec![0])
+        );
+    }
+
+    #[test]
+    fn parse_ssh_command_test_exit_code() {
+        let value: Value = serde_yaml::from_str(
+            "
+        command:
+            command: 'ls 2'
+            exit_codes: [1, 2, 3, 4, 5]
+        ",
+        )
+        .unwrap();
+        assert_eq!(
+            parse_ssh_command(&value).unwrap(),
+            SshCommand::new("ls 2".to_string(), vec![1, 2, 3, 4, 5])
+        );
+    }
 }
