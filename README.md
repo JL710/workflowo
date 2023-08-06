@@ -79,7 +79,7 @@ example_job:
         - "mkdir newly_created_directory"
         - "rmdir newly_created_directory"
 ```
-If you want to specify the allowed exit codes of a command you can use this representation:
+If you want to specify the allowed exit codes of a command you can use this representation (the default allowed exit code is 0):
 ```yaml
 commands:
   - "ls 1"
