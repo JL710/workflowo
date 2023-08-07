@@ -32,7 +32,7 @@ impl Task for Job {
         for child in self.children.iter() {
             if let Err(error) = child.execute() {
                 task_error_panic!(
-                    format!("Child task of {} failed with {:?}", &self.name, error),
+                    format!("Child task of {} failed\n{}", &self.name, error),
                     error
                 );
             }

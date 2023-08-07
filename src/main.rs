@@ -13,10 +13,10 @@ fn main() {
         if job.name == args.job {
             println!("Executing Job {}", job.name);
             if let Err(error) = job.execute() {
-                println!("Job failed: {}", error);
+                eprintln!("Job failed: {}", error);
             }
             return;
         }
     }
-    println!("Error! Job {} not found.", args.job);
+    eprintln!("Error! Job {} not found.", args.job);
 }

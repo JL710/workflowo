@@ -75,6 +75,13 @@ impl TaskError {
         }
     }
 
+    pub fn from_traskerror(message: String, source_error: TaskError) -> Self {
+        Self {
+            message,
+            source_error: SourceError::TaskError(Box::new(source_error))
+        }
+    }
+
     pub fn from_message(message: String) -> Self {
         Self {
             message,
@@ -85,11 +92,11 @@ impl TaskError {
 
 impl Display for TaskError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "TaskError {}. Source: {:?}",
-            self.message, self.source_error
-        )
+        match &self.source_error {
+            SourceError::None => write!(f, "{}", &self.message),
+            SourceError::TaskError(error) => write!(f, "{}\n{}", self.message, error),
+            SourceError::DynError(error) => write!(f, "{}\n{:?}", self.message, error)
+        }
     }
 }
 
