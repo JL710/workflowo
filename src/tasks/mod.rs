@@ -2,7 +2,9 @@ use std::{env, fmt, fmt::Display};
 mod error;
 pub mod shell;
 pub mod ssh;
-use error::{task_dynerror_panic, task_taskerror_panic, task_might_panic, task_panic, SourceError, TaskError};
+use error::{
+    task_dynerror_panic, task_might_panic, task_panic, task_taskerror_panic, SourceError, TaskError,
+};
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.
@@ -31,10 +33,7 @@ impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
         for child in self.children.iter() {
             if let Err(error) = child.execute() {
-                task_taskerror_panic!(
-                    format!("Child task of {} failed", &self.name),
-                    error
-                );
+                task_taskerror_panic!(format!("Child task of {} failed", &self.name), error);
             }
         }
         Ok(())
