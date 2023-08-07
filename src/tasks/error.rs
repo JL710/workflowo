@@ -16,9 +16,9 @@ pub(crate) use task_panic;
 /// The `error` can be anything that implements the `std::error::Error` trait.
 ///
 /// ```ignore
-/// task_error_panic!("message", error);
+/// task_dynerror_panic!("message", error);
 /// ```
-macro_rules! task_error_panic {
+macro_rules! task_dynerror_panic {
     ($message:expr, $error:expr) => {
         return Err(TaskError::from_error(
             $message.to_string(),
@@ -26,11 +26,11 @@ macro_rules! task_error_panic {
         ))
     };
 }
-pub(crate) use task_error_panic;
+pub(crate) use task_dynerror_panic;
 
 /// Will take a piece of code and a message.
 /// If the executed code returns Ok(value) the macro returns the value.
-/// If Err gets returned `task_error_panic` gets called with the message and the error.
+/// If Err gets returned `task_dynerror_panic` gets called with the message and the error.
 ///
 /// Can be used in functions with return type `Result<(), TaskError>`.
 ///
@@ -41,7 +41,7 @@ macro_rules! task_might_panic {
     ($code:expr, $message:expr) => {
         match $code {
             Ok(value) => value,
-            Err(error) => task_error_panic!($message, error),
+            Err(error) => task_dynerror_panic!($message, error),
         }
     };
 }
