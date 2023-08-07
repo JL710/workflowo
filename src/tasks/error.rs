@@ -28,6 +28,22 @@ macro_rules! task_dynerror_panic {
 }
 pub(crate) use task_dynerror_panic;
 
+/// Can be used in functions with return type [Result<(), TaskError>].
+/// The `error` must be a [TaskError].
+///
+/// ```ignore
+/// task_taskerror_panic!("message", error);
+/// ```
+macro_rules! task_taskerror_panic {
+    ($message:expr, $error:expr) => {
+        return Err(TaskError::from_traskerror(
+            $message.to_string(),
+            $error),
+        )
+    };
+}
+pub(crate) use task_taskerror_panic;
+
 /// Will take a piece of code and a message.
 /// If the executed code returns Ok(value) the macro returns the value.
 /// If Err gets returned `task_dynerror_panic` gets called with the message and the error.
@@ -37,6 +53,7 @@ pub(crate) use task_dynerror_panic;
 /// ```ignore
 /// task_might_panic!(code_that_would_need_to_be_unwrapped, "Message");
 /// ```
+// TODO: differ with SourceError versions
 macro_rules! task_might_panic {
     ($code:expr, $message:expr) => {
         match $code {
