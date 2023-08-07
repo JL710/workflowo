@@ -1,4 +1,4 @@
-use super::{task_dynerror_panic, task_might_panic, task_panic, Task, TaskError, SourceError};
+use super::{task_dynerror_panic, task_might_panic, task_panic, SourceError, Task, TaskError};
 use std::fmt::{self, Display};
 use std::process::Command;
 
