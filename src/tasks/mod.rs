@@ -31,9 +31,9 @@ impl Job {
 
 impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
-        for child in self.children.iter() {
+        for (index, child) in self.children.iter().enumerate() {
             if let Err(error) = child.execute() {
-                task_taskerror_panic!(format!("Child task of {} failed", &self.name), error);
+                task_taskerror_panic!(format!("Child {}(first is 0) of task {} failed", index, &self.name), error);
             }
         }
         Ok(())
