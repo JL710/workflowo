@@ -50,7 +50,6 @@ pub(crate) use task_taskerror_panic;
 /// ```ignore
 /// task_might_panic!(code_that_would_need_to_be_unwrapped, "Message");
 /// ```
-// TODO: differ with SourceError versions
 macro_rules! task_might_panic {
     ($code:expr, $message:expr) => {
         match $code {
