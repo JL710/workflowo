@@ -93,12 +93,12 @@ impl Task for OSDependent {
             }
         }
 
-        for child in &self.children {
+        for (index, child) in self.children.iter().enumerate() {
             if let Err(error) = child.execute() {
                 task_taskerror_panic!(
                     format!(
-                        "Child task of OsDependent {:?} failed with {:?}",
-                        self.os, error
+                        "Child task {}(first is 0) of OsDependent {:?} failed {}",
+                        index, self.os, error
                     ),
                     error
                 );
