@@ -1,4 +1,4 @@
-use super::{task_error_panic, task_might_panic, task_panic, SourceError, Task, TaskError};
+use super::{task_dynerror_panic, task_might_panic, task_panic, SourceError, Task, TaskError};
 use std::{
     fmt,
     fmt::Display,
@@ -18,7 +18,7 @@ fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Sessi
 
     // authenticate
     if let Err(error) = session.userauth_password(username, password) {
-        task_error_panic!("Authentication failed", error);
+        task_dynerror_panic!("Authentication failed", error);
     }
     Ok(session)
 }
