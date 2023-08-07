@@ -2,7 +2,7 @@ use std::{env, fmt, fmt::Display};
 mod error;
 pub mod shell;
 pub mod ssh;
-use error::{task_error_panic, task_might_panic, task_panic, TaskError};
+use error::{task_error_panic, task_might_panic, task_panic, SourceError, TaskError};
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.

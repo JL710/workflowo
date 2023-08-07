@@ -22,7 +22,7 @@ macro_rules! task_error_panic {
     ($message:expr, $error:expr) => {
         return Err(TaskError::from_error(
             $message.to_string(),
-            Box::new($error),
+            SourceError::DynError(Box::new($error)),
         ))
     };
 }
@@ -48,30 +48,37 @@ macro_rules! task_might_panic {
 pub(crate) use task_might_panic;
 
 #[derive(Debug)]
+pub enum SourceError {
+    TaskError(Box<TaskError>),
+    DynError(Box<dyn std::error::Error>),
+    None,
+}
+
+#[derive(Debug)]
 pub struct TaskError {
     message: String,
-    source_error: Option<Box<dyn std::error::Error>>,
+    source_error: SourceError,
 }
 
 impl TaskError {
-    pub fn new(message: String, source_error: Option<Box<dyn std::error::Error>>) -> Self {
+    pub fn new(message: String, source_error: SourceError) -> Self {
         Self {
             message,
             source_error,
         }
     }
 
-    pub fn from_error(message: String, source_error: Box<dyn std::error::Error>) -> Self {
+    pub fn from_error(message: String, source_error: SourceError) -> Self {
         Self {
             message,
-            source_error: Some(source_error),
+            source_error,
         }
     }
 
     pub fn from_message(message: String) -> Self {
         Self {
             message,
-            source_error: None,
+            source_error: SourceError::None,
         }
     }
 }
@@ -90,7 +97,7 @@ impl From<Box<dyn std::error::Error>> for TaskError {
     fn from(value: Box<dyn std::error::Error>) -> Self {
         Self {
             message: value.to_string(),
-            source_error: Some(value),
+            source_error: SourceError::DynError(value),
         }
     }
 }
