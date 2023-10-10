@@ -33,7 +33,10 @@ impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
         for (index, child) in self.children.iter().enumerate() {
             if let Err(error) = child.execute() {
-                task_taskerror_panic!(format!("Child {}(first is 0) of task {} failed", index, &self.name), error);
+                task_taskerror_panic!(
+                    format!("Child {}(first is 0) of task {} failed", index, &self.name),
+                    error
+                );
             }
         }
         Ok(())
