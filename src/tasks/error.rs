@@ -36,7 +36,7 @@ pub(crate) use task_dynerror_panic;
 /// ```
 macro_rules! task_taskerror_panic {
     ($message:expr, $error:expr) => {
-        return Err(TaskError::from_traskerror($message.to_string(), $error))
+        return Err(TaskError::from_taskerror($message.to_string(), $error))
     };
 }
 pub(crate) use task_taskerror_panic;
@@ -88,7 +88,7 @@ impl TaskError {
         }
     }
 
-    pub fn from_traskerror(message: String, source_error: TaskError) -> Self {
+    pub fn from_taskerror(message: String, source_error: TaskError) -> Self {
         Self {
             message,
             source_error: SourceError::TaskError(Box::new(source_error)),
