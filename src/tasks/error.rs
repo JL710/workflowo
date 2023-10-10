@@ -107,7 +107,7 @@ impl Display for TaskError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.source_error {
             SourceError::None => write!(f, "{}", &self.message.lines().map(|x| "║ ".to_owned() + x + "\n").collect::<String>()),
-            SourceError::TaskError(error) => write!(f, "{}\n{}", self.message.lines().map(|x| "║ ".to_owned() + x + "\n╠══ Caused By").collect::<String>(), error),
+            SourceError::TaskError(error) => write!(f, "{}\n{}", self.message.lines().map(|x| "║ ".to_owned() + x + "\n╠══ Caused by").collect::<String>(), error),
             SourceError::DynError(error) => write!(f, "{}\n{:?}", self.message, error),
         }
     }
