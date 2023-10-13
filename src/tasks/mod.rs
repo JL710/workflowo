@@ -1,103 +1,10 @@
 use std::{env, fmt, fmt::Display};
+mod error;
 pub mod shell;
 pub mod ssh;
-
-/// Can be used in functions with return type `Result<(), TaskError>`.
-///
-/// ```ignore
-/// task_panic!("Message");
-/// ```
-macro_rules! task_panic {
-    ($message:expr) => {
-        return Err(TaskError::from_message($message.to_string()));
-    };
-}
-pub(crate) use task_panic;
-
-/// Can be used in functions with return type `Result<(), TaskError>`.
-/// The `error` can be anything that implements the `std::error::Error` trait.
-///
-/// ```ignore
-/// task_error_panic!("message", error);
-/// ```
-macro_rules! task_error_panic {
-    ($message:expr, $error:expr) => {
-        return Err(TaskError::from_error(
-            $message.to_string(),
-            Box::new($error),
-        ))
-    };
-}
-pub(crate) use task_error_panic;
-
-/// Will take a piece of code and a message.
-/// If the executed code returns Ok(value) the macro returns the value.
-/// If Err gets returned `task_error_panic` gets called with the message and the error.
-///
-/// Can be used in functions with return type `Result<(), TaskError>`.
-///
-/// ```ignore
-/// task_might_panic!(code_that_would_need_to_be_unwrapped, "Message");
-/// ```
-macro_rules! task_might_panic {
-    ($code:expr, $message:expr) => {
-        match $code {
-            Ok(value) => value,
-            Err(error) => task_error_panic!($message, error),
-        }
-    };
-}
-pub(crate) use task_might_panic;
-
-#[derive(Debug)]
-pub struct TaskError {
-    message: String,
-    source_error: Option<Box<dyn std::error::Error>>,
-}
-
-impl TaskError {
-    fn new(message: String, source_error: Option<Box<dyn std::error::Error>>) -> Self {
-        Self {
-            message,
-            source_error,
-        }
-    }
-
-    fn from_error(message: String, source_error: Box<dyn std::error::Error>) -> Self {
-        Self {
-            message,
-            source_error: Some(source_error),
-        }
-    }
-
-    fn from_message(message: String) -> Self {
-        Self {
-            message,
-            source_error: None,
-        }
-    }
-}
-
-impl Display for TaskError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "TaskError {}. Source: {:?}",
-            self.message, self.source_error
-        )
-    }
-}
-
-impl From<Box<dyn std::error::Error>> for TaskError {
-    fn from(value: Box<dyn std::error::Error>) -> Self {
-        Self {
-            message: value.to_string(),
-            source_error: Some(value),
-        }
-    }
-}
-
-impl std::error::Error for TaskError {}
+use error::{
+    task_dynerror_panic, task_might_panic, task_panic, task_taskerror_panic, SourceError, TaskError,
+};
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.
@@ -124,10 +31,10 @@ impl Job {
 
 impl Task for Job {
     fn execute(&self) -> Result<(), TaskError> {
-        for child in self.children.iter() {
+        for (index, child) in self.children.iter().enumerate() {
             if let Err(error) = child.execute() {
-                task_error_panic!(
-                    format!("Child task of {} failed with {:?}", &self.name, error),
+                task_taskerror_panic!(
+                    format!("Child {}(first is 0) of task {} failed", index, &self.name),
                     error
                 );
             }
@@ -189,12 +96,12 @@ impl Task for OSDependent {
             }
         }
 
-        for child in &self.children {
+        for (index, child) in self.children.iter().enumerate() {
             if let Err(error) = child.execute() {
-                task_error_panic!(
+                task_taskerror_panic!(
                     format!(
-                        "Child task of OsDependent {:?} failed with {:?}",
-                        self.os, error
+                        "Child task {}(first is 0) of OsDependent {:?} failed {}",
+                        index, self.os, error
                     ),
                     error
                 );
