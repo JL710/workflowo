@@ -401,7 +401,7 @@ fn parse_ssh_command(value: &Value) -> Result<SshCommand, ParsingError> {
                 }
                 exit_codes.push(exit_code_value.as_i64().unwrap() as i32);
             }
-            Ok(SshCommand::new(command.to_string(), exit_codes))
+            Ok(SshCommand::new(command, exit_codes))
         }
         _ => Err(ParsingError::from_string(format!(
             "command is not a string: {:?}",
@@ -455,10 +455,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
             };
 
             return Ok(T::new(
-                command_value
-                    .split(' ')
-                    .map(|x| x.to_string())
-                    .collect(),
+                command_value.split(' ').map(|x| x.to_string()).collect(),
                 work_dir_value,
             ));
         }
@@ -466,10 +463,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T, Parsing
             // case it is just the string shortcut `bash: "somestring"`
             Value::String(string) => {
                 return Ok(T::new(
-                    string
-                        .split(' ')
-                        .map(|x| x.to_string())
-                        .collect(),
+                    string.split(' ').map(|x| x.to_string()).collect(),
                     None,
                 ));
             }
