@@ -6,6 +6,9 @@ The configuration of pipelines is in a yaml file. There are Jobs located that ca
 
 Be careful when executing workflowo jobs from others. They may contain malicious code!
 
+## Todo
+- [ ] resolve relative/`~` paths
+- [ ] Default for Inputs
 
 ## Installation
 ```
