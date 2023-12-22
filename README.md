@@ -8,7 +8,8 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 
 ## Todo
 - [ ] resolve relative/`~` paths
-- [ ] Default for Inputs
+- [ ] default for inputs
+- [ ] improve error display
 
 ## Installation
 ```
