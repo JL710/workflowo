@@ -1,14 +1,11 @@
 use std::{env, fmt, fmt::Display};
-mod error;
 pub mod shell;
 pub mod ssh;
-use error::{
-    task_dynerror_panic, task_might_panic, task_panic, task_taskerror_panic, SourceError, TaskError,
-};
+use anyhow::{Context, Result};
 
 pub trait Task: Display {
     /// Will be called when the task should be executed.
-    fn execute(&self) -> Result<(), TaskError>;
+    fn execute(&self) -> Result<()>;
 }
 
 pub struct Job {
@@ -30,14 +27,12 @@ impl Job {
 }
 
 impl Task for Job {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         for (index, child) in self.children.iter().enumerate() {
-            if let Err(error) = child.execute() {
-                task_taskerror_panic!(
-                    format!("Child {}(first is 0) of task {} failed", index, &self.name),
-                    error
-                );
-            }
+            child.execute().context(format!(
+                "Child {}(first is 0) of task {} failed",
+                index, &self.name
+            ))?;
         }
         Ok(())
     }
@@ -80,7 +75,7 @@ impl OSDependent {
 }
 
 impl Task for OSDependent {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         match self.os {
             OS::Windows => {
                 if env::consts::OS != "windows" {
@@ -97,15 +92,10 @@ impl Task for OSDependent {
         }
 
         for (index, child) in self.children.iter().enumerate() {
-            if let Err(error) = child.execute() {
-                task_taskerror_panic!(
-                    format!(
-                        "Child task {}(first is 0) of OsDependent {:?} failed {}",
-                        index, self.os, error
-                    ),
-                    error
-                );
-            }
+            child.execute().context(format!(
+                "Child task {}(first is 0) of OsDependent {:?} failed",
+                index, self.os
+            ))?;
         }
         Ok(())
     }
@@ -135,7 +125,7 @@ impl PrintTask {
 }
 
 impl Task for PrintTask {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         println!("{}", self.prompt);
         Ok(())
     }

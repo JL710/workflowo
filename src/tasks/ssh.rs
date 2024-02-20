@@ -1,4 +1,5 @@
-use super::{task_dynerror_panic, task_might_panic, task_panic, SourceError, Task, TaskError};
+use super::Task;
+use anyhow::{bail, Context, Result};
 use std::{
     fmt,
     fmt::Display,
@@ -6,20 +7,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Session, TaskError> {
+fn connect_ssh(addr: &str, username: &str, password: &str) -> Result<ssh2::Session> {
     // create connection with handshake etc.
-    let tcp = task_might_panic!(
-        std::net::TcpStream::connect(addr.to_string() + ":22"),
-        "Connecting failed"
-    );
-    let mut session = task_might_panic!(ssh2::Session::new(), "Failed to create ssh Session");
+    let tcp =
+        std::net::TcpStream::connect(addr.to_string() + ":22").context("Connecting failed")?;
+    let mut session = ssh2::Session::new().context("Failed to create ssh Session")?;
     session.set_tcp_stream(tcp);
-    task_might_panic!(session.handshake(), "ssh handshake failed");
+    session.handshake().context("ssh handshake failed")?;
 
     // authenticate
-    if let Err(error) = session.userauth_password(username, password) {
-        task_dynerror_panic!("Authentication failed", error);
-    }
+    session
+        .userauth_password(username, password)
+        .context("Authentication failed")?;
     Ok(session)
 }
 
@@ -38,10 +37,10 @@ impl SshCommand {
         }
     }
 
-    fn execute(&self, session: &ssh2::Session) -> Result<(), TaskError> {
+    fn execute(&self, session: &ssh2::Session) -> Result<()> {
         let (_stdout, exit_code) = execute_on_session(session, &self.command)?;
         if !self.allowed_exit_codes.contains(&exit_code) {
-            task_panic!(format!(
+            bail!(format!(
                 "Something went wrong while executing an command (`{}`). Exit code {}.",
                 self.command, exit_code
             ));
@@ -50,7 +49,7 @@ impl SshCommand {
     }
 }
 
-/// A talks that holds [`SshCommand`]'s with the remote information and can execute them in order.
+/// A task that holds [`SshCommand`]'s with the remote information and can execute them in order.
 #[derive(Debug)]
 pub struct SshTask {
     address: std::net::Ipv4Addr,
@@ -76,32 +75,42 @@ impl SshTask {
 }
 
 /// Executes a command on the [`ssh2::Session`]. Returns a Tuple with the Prompt and exit code.
-fn execute_on_session(session: &ssh2::Session, command: &str) -> Result<(String, i32), TaskError> {
-    let mut channel = session.channel_session().unwrap();
+fn execute_on_session(session: &ssh2::Session, command: &str) -> Result<(String, i32)> {
+    let mut channel = session
+        .channel_session()
+        .context("Failed to establish a channel session")?;
 
-    task_might_panic!(
-        channel.exec(command),
-        "Error while executing command via ssh"
-    );
+    channel
+        .exec(command)
+        .context("Error while executing command via ssh")?;
 
     let mut stdout = String::new();
-    task_might_panic!(
-        channel.read_to_string(&mut stdout),
-        "Failed to read output of ssh channel"
-    );
+    channel
+        .read_to_string(&mut stdout)
+        .context("Failed to read output of ssh channel")?;
 
-    channel.wait_close().unwrap();
+    channel
+        .wait_close()
+        .context("Error while closing the channel session")?;
 
-    Ok((stdout, channel.exit_status().unwrap()))
+    Ok((
+        stdout,
+        channel
+            .exit_status()
+            .context("Failed to read exit status")?,
+    ))
 }
 
 impl Task for SshTask {
-    fn execute(&self) -> Result<(), TaskError> {
-        let sess = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
+    fn execute(&self) -> Result<()> {
+        let sess = connect_ssh(&self.address.to_string(), &self.user, &self.password)
+            .context("failed to connect via ssh")?;
 
         // execute commands
         for command in &self.commands {
-            command.execute(&sess)?;
+            command
+                .execute(&sess)
+                .context(format!("failed to execute command via ssh: {:?}", &command))?;
         }
         Ok(())
     }
@@ -156,33 +165,35 @@ impl RemoteTransfer for ScpFileDownload {
 }
 
 impl Task for ScpFileDownload {
-    fn execute(&self) -> Result<(), TaskError> {
-        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
+    fn execute(&self) -> Result<()> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)
+            .context("Failed to connect via ssh")?;
 
         // receive file
-        let (mut remote_file, _stat) =
-            task_might_panic!(session.scp_recv(&self.remote_path), "Error opening file");
+        let (mut remote_file, _stat) = session
+            .scp_recv(&self.remote_path)
+            .context("Error opening file")?;
         let mut contents = Vec::new();
-        task_might_panic!(
-            remote_file.read_to_end(&mut contents),
-            "Error while reading file"
-        );
+
+        remote_file
+            .read_to_end(&mut contents)
+            .context("Error while reading file")?;
 
         // close channel and wait for the content to be transferred
-        remote_file.send_eof().unwrap();
-        remote_file.wait_eof().unwrap();
-        remote_file.close().unwrap();
-        remote_file.wait_close().unwrap();
+        remote_file.send_eof().context("Error while sending EOF")?;
+        remote_file
+            .wait_eof()
+            .context("Error while waiting for EOF")?;
+        remote_file.close().context("Error while closing file")?;
+        remote_file
+            .wait_close()
+            .context("Error while waiting for close file")?;
 
         // write content to local file
-        let mut file = task_might_panic!(
-            std::fs::File::create(&self.local_path),
-            format!("Error while creating file {:?}", self.local_path)
-        );
-        task_might_panic!(
-            file.write_all(&contents),
-            format!("Error while reading file {:?}", self.local_path)
-        );
+        let mut file = std::fs::File::create(&self.local_path)
+            .context(format!("Error while creating file {:?}", self.local_path))?;
+        file.write_all(&contents)
+            .context(format!("Error while reading file {:?}", self.local_path))?;
         Ok(())
     }
 }
@@ -226,38 +237,39 @@ impl RemoteTransfer for ScpFileUpload {
 }
 
 impl Task for ScpFileUpload {
-    fn execute(&self) -> Result<(), TaskError> {
-        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
+    fn execute(&self) -> Result<()> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)
+            .context("Failed to connect via ssh")?;
 
         // read file
-        let mut file = task_might_panic!(
-            std::fs::File::open(&self.local_path),
-            format!("Error while opening file {:?}", self.local_path)
-        );
+        let mut file = std::fs::File::open(&self.local_path)
+            .context(format!("Error while opening file {:?}", self.local_path))?;
         let mut content = Vec::new();
-        task_might_panic!(
-            file.read_to_end(&mut content),
-            format!("Error while reading file {:?}", self.local_path)
-        );
+
+        file.read_to_end(&mut content)
+            .context(format!("Error while reading file {:?}", self.local_path))?;
 
         // upload file
-        let mut remote_file = task_might_panic!(
-            session.scp_send(&self.remote_path, 0o644, content.len() as u64, None),
-            format!(
+        let mut remote_file = session
+            .scp_send(&self.remote_path, 0o644, content.len() as u64, None)
+            .context(format!(
                 "Error while creating file {:?} on remote machine",
                 self.remote_path
-            )
-        );
-        task_might_panic!(
-            remote_file.write_all(&content),
-            format!("Error while writing to file {:?}", self.remote_path)
-        );
+            ))?;
+        remote_file.write_all(&content).context(format!(
+            "Error while writing to file {:?}",
+            self.remote_path
+        ))?;
 
         // close channel and wait for the content to be transferred
-        remote_file.send_eof().unwrap();
-        remote_file.wait_eof().unwrap();
-        remote_file.close().unwrap();
-        remote_file.wait_close().unwrap();
+        remote_file.send_eof().context("Error while sending EOF")?;
+        remote_file
+            .wait_eof()
+            .context("Error while waiting for EOF")?;
+        remote_file.close().context("Error while closing file")?;
+        remote_file
+            .wait_close()
+            .context("Error while waiting for close file")?;
         Ok(())
     }
 }
@@ -301,22 +313,20 @@ impl RemoteTransfer for SftpDownload {
 }
 
 impl Task for SftpDownload {
-    fn execute(&self) -> Result<(), TaskError> {
-        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
+    fn execute(&self) -> Result<()> {
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)
+            .context("Failed to connect via ssh")?;
 
-        let sftp = task_might_panic!(session.sftp(), "Could not create sftp subsystem");
+        let sftp = session.sftp().context("Could not create sftp subsystem")?;
 
-        let stat = task_might_panic!(
-            sftp.stat(&self.remote_path),
-            format!(
-                "Error while getting stats of remote_path({})",
-                &self.remote_path.to_str().unwrap()
-            )
-        );
+        let stat = sftp.stat(&self.remote_path).context(format!(
+            "Error while getting stats of remote_path({})",
+            &self.remote_path.to_str().unwrap()
+        ))?;
 
         if stat.is_file() {
             if self.local_path.is_file() {
-                task_panic!(format!(
+                bail!(format!(
                     "File {} already exists",
                     &self.local_path.to_str().unwrap()
                 ));
@@ -326,29 +336,32 @@ impl Task for SftpDownload {
                     &sftp,
                     &self.local_path.join(self.remote_path.file_name().unwrap()),
                     &self.remote_path,
-                )?;
+                )
+                .context("Error while downloading file via sftp")?;
             } else {
-                download_sftp_file(&sftp, &self.local_path, &self.remote_path)?;
+                download_sftp_file(&sftp, &self.local_path, &self.remote_path)
+                    .context("Error while downloading file via sftp")?;
             }
         } else if stat.is_dir() {
             // check if directory exists
             if self.local_path.is_dir() {
-                task_panic!("Directory already exists");
+                bail!("Directory already exists");
             }
             // check if parent directory exists
             if !self.local_path.parent().unwrap().is_dir() {
-                task_panic!(format!(
+                bail!(format!(
                     "Path {} does not exist",
                     self.local_path.parent().unwrap().to_str().unwrap()
                 ));
             }
-            task_might_panic!(
-                std::fs::create_dir(&self.local_path),
-                format!("Error while creating directory {:?}", self.local_path)
-            );
+
+            std::fs::create_dir(&self.local_path).context(format!(
+                "Error while creating directory {:?}",
+                self.local_path
+            ))?;
             download_sftp_dir(&sftp, &self.local_path, &self.remote_path)?;
         } else {
-            task_panic!(format!(
+            bail!(format!(
                 "Remote path {} does not exist",
                 self.remote_path.to_str().unwrap()
             ));
@@ -368,53 +381,44 @@ impl Display for SftpDownload {
     }
 }
 
-fn download_sftp_dir(
-    sftp: &ssh2::Sftp,
-    local_path: &Path,
-    remote_path: &Path,
-) -> Result<(), TaskError> {
-    for (path, file_stat) in sftp.readdir(remote_path).unwrap() {
+fn download_sftp_dir(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) -> Result<()> {
+    for (path, file_stat) in sftp
+        .readdir(remote_path)
+        .context("Erro while reading directory via sftp")?
+    {
         if file_stat.is_file() {
-            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path)?;
+            download_sftp_file(sftp, &local_path.join(path.file_name().unwrap()), &path)
+                .context("Error while downloading file via sftp")?;
         } else {
-            task_might_panic!(
-                std::fs::create_dir(local_path.join(path.file_name().unwrap())),
-                format!(
-                    "Error while creating directory {:?}",
-                    local_path.join(path.file_name().unwrap())
-                )
-            );
-            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path)?;
+            std::fs::create_dir(local_path.join(path.file_name().unwrap())).context(format!(
+                "Error while creating directory {:?}",
+                local_path.join(path.file_name().unwrap())
+            ))?;
+            download_sftp_dir(sftp, &local_path.join(path.file_name().unwrap()), &path)
+                .context("Error while downloading file via sftp")?;
         }
     }
     Ok(())
 }
 
 // will download a file via sftp -> assumes that the paths are valid
-fn download_sftp_file(
-    sftp: &ssh2::Sftp,
-    local_path: &Path,
-    remote_path: &Path,
-) -> Result<(), TaskError> {
-    let mut remote_file = task_might_panic!(
-        sftp.open(remote_path),
-        format!("Could not open file {:?}", remote_path)
-    );
+fn download_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) -> Result<()> {
+    let mut remote_file = sftp
+        .open(remote_path)
+        .context(format!("Could not open file {:?}", remote_path))?;
 
     let mut contents = Vec::new();
-    task_might_panic!(
-        remote_file.read_to_end(&mut contents),
-        format!("Error while reading file {:?}", remote_path)
-    );
 
-    let mut local_file = task_might_panic!(
-        std::fs::File::create(local_path),
-        format!("Could not create local file {:?}", local_path)
-    );
-    task_might_panic!(
-        local_file.write_all(&contents),
-        format!("Error while writing to file {:?}", local_path)
-    );
+    remote_file
+        .read_to_end(&mut contents)
+        .context(format!("Error while reading file {:?}", remote_path))?;
+
+    let mut local_file = std::fs::File::create(local_path)
+        .context(format!("Could not create local file {:?}", local_path))?;
+
+    local_file
+        .write_all(&contents)
+        .context(format!("Error while writing to file {:?}", local_path))?;
     Ok(())
 }
 
@@ -457,96 +461,90 @@ impl Display for SftpUpload {
 }
 
 impl Task for SftpUpload {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         // check if local stuff is valid
         if !self.local_path.is_dir() && !self.local_path.is_file() {
-            panic!("Local {} does not exists", {
+            bail!(format!(
+                "Local {} does not exists",
                 self.local_path.to_str().unwrap()
-            });
+            ));
         }
 
-        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)?;
+        let session = connect_ssh(&self.address.to_string(), &self.user, &self.password)
+            .context("Error while connect via ssh")?;
 
-        let sftp = task_might_panic!(session.sftp(), "Could not create sftp subsystem");
+        let sftp = session.sftp().context("Could not create sftp subsystem")?;
 
         if self.local_path.is_file() {
-            upload_sftp_file(&sftp, &self.local_path, &self.remote_path)?;
+            upload_sftp_file(&sftp, &self.local_path, &self.remote_path)
+                .context("Error while uploading file via sftp")?;
         } else {
             if sftp.stat(&self.remote_path).is_ok() {
-                task_panic!(format!(
+                bail!(format!(
                     "Remote path {} already exists",
                     &self.remote_path.to_str().unwrap()
                 ));
             }
-            task_might_panic!(
-                sftp.mkdir(&self.remote_path, 0o774),
-                format!("Could not create dir {:?}", self.remote_path)
-            );
-            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path)?;
+            sftp.mkdir(&self.remote_path, 0o774)
+                .context(format!("Could not create dir {:?}", self.remote_path))?;
+            upload_sftp_directory(&sftp, &self.local_path, &self.remote_path)
+                .context("Error while uploading file via sftp")?;
         }
         Ok(())
     }
 }
 
-fn upload_sftp_directory(
-    sftp: &ssh2::Sftp,
-    local_path: &Path,
-    remote_path: &Path,
-) -> Result<(), TaskError> {
-    for dir_entry in std::fs::read_dir(local_path).unwrap() {
-        let dir_entry = dir_entry.unwrap();
+fn upload_sftp_directory(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) -> Result<()> {
+    for dir_entry in std::fs::read_dir(local_path).context(format!(
+        "Error while reading directory {}",
+        local_path.to_str().unwrap()
+    ))? {
+        let dir_entry = dir_entry?;
         if dir_entry.file_type().unwrap().is_file() {
             upload_sftp_file(
                 sftp,
                 &dir_entry.path(),
                 &remote_path.join(dir_entry.path().file_name().unwrap()),
-            )?;
+            )
+            .context("Error while uploading file via sftp")?;
         } else {
-            task_might_panic!(
-                sftp.mkdir(
-                    &remote_path.join(dir_entry.path().file_name().unwrap()),
-                    0o774,
-                ),
-                format!(
-                    "Error while creating directory {:?}",
-                    &remote_path.join(dir_entry.path().file_name().unwrap())
-                )
-            );
+            sftp.mkdir(
+                &remote_path.join(dir_entry.path().file_name().unwrap()),
+                0o774,
+            )
+            .context(format!(
+                "Error while creating directory {:?}",
+                &remote_path.join(dir_entry.path().file_name().unwrap())
+            ))?;
             upload_sftp_directory(
                 sftp,
                 &dir_entry.path(),
                 &remote_path.join(dir_entry.path().file_name().unwrap()),
-            )?;
+            )
+            .context("Error while uploading file via sftp")?;
         }
     }
     Ok(())
 }
 
 /// uploads a file via the sftp connection -> asserts the paths are valid
-fn upload_sftp_file(
-    sftp: &ssh2::Sftp,
-    local_path: &Path,
-    remote_path: &Path,
-) -> Result<(), TaskError> {
+fn upload_sftp_file(sftp: &ssh2::Sftp, local_path: &Path, remote_path: &Path) -> Result<()> {
     // read local file
-    let mut local_file = task_might_panic!(
-        std::fs::File::open(local_path),
-        format!("open local file failed {:?}", local_path)
-    );
+    let mut local_file = std::fs::File::open(local_path)
+        .context(format!("open local file failed {:?}", local_path))?;
     let mut content = Vec::new();
-    task_might_panic!(
-        local_file.read_to_end(&mut content),
-        format!("error wile reading file {:?}", local_path)
-    );
+
+    local_file
+        .read_to_end(&mut content)
+        .context(format!("error wile reading file {:?}", local_path))?;
 
     // write to remote file
-    let mut remote_file = task_might_panic!(
-        sftp.create(remote_path),
-        format!("Could not open remote file {:?}", remote_path)
-    );
-    task_might_panic!(
-        remote_file.write_all(&content),
-        format!("Error while writing to file {:?}", remote_path)
-    );
+    let mut remote_file = sftp
+        .create(remote_path)
+        .context(format!("Could not open remote file {:?}", remote_path))?;
+
+    remote_file
+        .write_all(&content)
+        .context(format!("Error while writing to file {:?}", remote_path))?;
     Ok(())
 }
