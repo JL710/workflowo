@@ -8,7 +8,7 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 
 ## Todo
 - [ ] resolve relative/`~` paths
-- [ ] default for inputs
+- [X] default for inputs
 - [ ] parallel execution task
 - [ ] exit codes for bash and cmd task
 - [X] improve error display
@@ -173,6 +173,12 @@ Formats to:
 ### !Input
 ```yaml
 !Input "Enter Something: "
+
+!Input ["Enter Something: "]
+!Input ["Enter Something: ", "this is the default"]
+  
+!Input {prompt: "Enter Something: "}
+!Input {prompt: "Enter Something: ", default: "this is the default"}
 ```
 > use `!HiddenInput` to hide input
 
