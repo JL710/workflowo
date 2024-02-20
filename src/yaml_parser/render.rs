@@ -1,116 +1,130 @@
 use super::get_entry;
+use anyhow::{bail, Context, Result};
 use serde_yaml::{self, Value};
 use std::collections::HashMap;
 use std::io::Write;
 
 /// resolves all tagged values recursively
-pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) {
+pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) -> Result<()> {
     match value {
         Value::Mapping(map) => {
             for map_value in map.values_mut() {
-                render(_ids, map_value);
+                render(_ids, map_value)?;
             }
         }
         Value::Sequence(seq) => {
             for item in seq {
-                render(_ids, item);
+                render(_ids, item)?;
             }
         }
         Value::Tagged(tagged) => {
             let mut new_value = match tagged.tag.to_string().as_str() {
-                "!Input" => render_tag_input(_ids, &mut tagged.value),
-                "!HiddenInput" => render_tag_hidden_input(_ids, &mut tagged.value),
-                "!StrF" => render_tag_strf(_ids, &tagged.value),
-                "!Id" => render_tag_id(_ids, &mut tagged.value),
-                _ => panic!("{} is not a valid tag", tagged.tag),
+                "!Input" => {
+                    render_tag_input(_ids, &mut tagged.value).context("failed to resolve !Input")?
+                }
+                "!HiddenInput" => render_tag_hidden_input(_ids, &mut tagged.value)
+                    .context("failed to resolve !HiddenInput")?,
+                "!StrF" => {
+                    render_tag_strf(_ids, &tagged.value).context("failed to resolve !StrF")?
+                }
+                "!Id" => render_tag_id(_ids, &mut tagged.value).context("failed to resolve !Id")?,
+                _ => bail!(format!("{} is not a valid tag", tagged.tag)),
             };
             std::mem::swap(value, &mut new_value);
         }
         _ => {}
     }
+    Ok(())
 }
 
-fn render_tag_strf(_ids: &mut HashMap<String, Value>, tag_value: &Value) -> Value {
+fn render_tag_strf(_ids: &mut HashMap<String, Value>, tag_value: &Value) -> Result<Value> {
     if !tag_value.is_sequence() {
         panic!("StringF needs to be a sequence of Strings",);
     }
     let mut formatted_string = String::new();
     for v in tag_value.as_sequence().unwrap().to_owned().iter_mut() {
-        render(_ids, v);
+        render(_ids, v)?;
         if !v.is_string() {
             panic!("StringF needs to be a sequence of strings",);
         }
         formatted_string += v.as_str().unwrap();
     }
-    Value::String(formatted_string)
+    Ok(Value::String(formatted_string))
 }
 
-fn render_tag_hidden_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Value {
-    render(_ids, tag_value);
+fn render_tag_hidden_input(
+    _ids: &mut HashMap<String, Value>,
+    tag_value: &mut Value,
+) -> Result<Value> {
+    render(_ids, tag_value)?;
     if !tag_value.is_string() {
-        panic!("HiddenInput prompt is not a valid string")
+        bail!("HiddenInput prompt is not a valid string")
     }
-    Value::String(
+    Ok(Value::String(
         rpassword::prompt_password(tag_value.as_str().unwrap()).expect("rpassword input failed"),
-    )
+    ))
 }
 
-fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Value {
-    render(_ids, tag_value);
+fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Result<Value> {
+    render(_ids, tag_value)?;
     if !tag_value.is_string() {
         panic!("Input prompt is not a valid string")
     }
     print!("{}", tag_value.as_str().unwrap());
-    std::io::stdout().flush().unwrap();
+    std::io::stdout()
+        .flush()
+        .context("failed to flush stdout")?;
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input).unwrap();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("failed to read line")?;
     while input.ends_with('\n') || input.ends_with('\r') {
         input.remove(input.len() - 1);
     }
-    Value::String(input)
+    Ok(Value::String(input))
 }
 
-fn render_tag_id(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Value {
+fn render_tag_id(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Result<Value> {
     let id = match &tag_value {
         Value::Mapping(content_map) => match get_entry(content_map, "id".into()) {
             Some(id_value) => id_value
                 .as_str()
-                .expect("!Id tag id is not of type string")
+                .context("!Id tag id is not of type string")?
                 .to_owned(),
-            _ => panic!("id key not given in id map"),
+            _ => bail!("id key not given in id map"),
         },
         Value::Sequence(content_sequence) => {
             if content_sequence.is_empty() {
-                panic!("!Id tag is missing its id");
+                bail!("!Id tag is missing its id");
             }
             content_sequence[0]
                 .as_str()
-                .expect("invalid !Id tag id value. Value is not a string.")
+                .context("invalid !Id tag id value. Value is not a string.")?
                 .to_owned()
         }
-        _ => panic!("!Id value needs to be a map or sequence!"),
+        _ => bail!("!Id value needs to be a map or sequence!"),
     };
 
     let mut id_value = match &tag_value {
         Value::Mapping(content_map) => match get_entry(content_map, "value".into()) {
             Some(id_value) => id_value,
-            _ => panic!("id key not given in id map"),
+            _ => bail!("id key not given in id map"),
         },
         Value::Sequence(content_sequence) => {
             if content_sequence.len() < 2 {
-                panic!("!Id tag is missing its value");
+                bail!("!Id tag is missing its value");
             }
             content_sequence[1].to_owned()
         }
-        _ => panic!("!Id value needs to be a map or sequence!"),
+        _ => bail!("!Id value needs to be a map or sequence!"),
     };
 
     if !_ids.contains_key(&id) {
-        render(_ids, &mut id_value);
+        render(_ids, &mut id_value)?;
         _ids.insert(id.clone(), id_value);
     }
 
-    _ids.get(&id).unwrap().to_owned()
+    Ok(_ids.get(&id).unwrap().to_owned())
 }
 
 #[cfg(test)]
@@ -120,7 +134,7 @@ mod tests {
         use super::render;
         let content = "!StrF ['test', 'testa']";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
         assert_eq!("testtesta", value.as_str().unwrap());
     }
 
@@ -133,7 +147,7 @@ mod tests {
         key2: !Id ['id', 'Second Value']
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
         // assert that at key2 the first value for the id `id` is used
         assert_eq!(
             "First Value",
@@ -153,7 +167,7 @@ mod tests {
         key2: !Id {id: 'id', value: 'Second Value'}
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
         // assert that at key2 the first value for the id `id` is used
         assert_eq!(
             "First Value",
@@ -174,7 +188,7 @@ mod tests {
         key2: !Id {id: 'id', value: 'Second Value'}
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
         // assert that at key2 the first value for the id `id` is used
         assert_eq!(
             "First Value",
@@ -194,7 +208,7 @@ mod tests {
         key2: !Id ['id', 'Second Value']
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
         // assert that at key2 the first value for the id `id` is used
         assert_eq!(
             "First Value",
@@ -218,7 +232,7 @@ mod tests {
                 - !StrF ['test', 'testa']
         ";
         let mut value: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
-        render(&mut std::collections::HashMap::new(), &mut value);
+        render(&mut std::collections::HashMap::new(), &mut value).unwrap();
 
         assert!(get_entry(&value.as_mapping().unwrap(), "key1".into())
             .unwrap()
