@@ -9,7 +9,7 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 ## Todo
 - [ ] resolve relative/`~` paths
 - [ ] default for inputs
-- [ ] improve error display
+- [X] improve error display
 
 ## Installation
 ```
