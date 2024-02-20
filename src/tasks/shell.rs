@@ -1,4 +1,5 @@
-use super::{task_dynerror_panic, task_might_panic, task_panic, SourceError, Task, TaskError};
+use super::Task;
+use anyhow::{bail, Context, Result};
 use std::fmt::{self, Display};
 use std::process::Command;
 
@@ -19,19 +20,20 @@ impl ShellCommand for Bash {
 }
 
 impl Task for Bash {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         let mut command = Command::new("bash");
 
         if let Some(work_dir) = &self.work_dir {
             command.current_dir(work_dir);
         }
 
-        let output = task_might_panic!(
-            command.arg("-c").arg(&self.args.join(" ")).output(),
-            format!("Failed while executing bash command")
-        );
+        let output = command
+            .arg("-c")
+            .arg(&self.args.join(" "))
+            .output()
+            .context("Failed while executing bash command")?;
         if !output.status.success() {
-            task_panic!(format!(
+            bail!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
@@ -60,19 +62,20 @@ impl ShellCommand for Cmd {
 }
 
 impl Task for Cmd {
-    fn execute(&self) -> Result<(), TaskError> {
+    fn execute(&self) -> Result<()> {
         let mut command = Command::new("cmd");
 
         if let Some(work_dir) = &self.work_dir {
             command.current_dir(work_dir);
         }
 
-        let output = task_might_panic!(
-            command.arg("/c").args(&self.args).output(),
-            "Failed while cmd execution"
-        );
+        let output = command
+            .arg("/c")
+            .args(&self.args)
+            .output()
+            .context("Failed while cmd execution")?;
         if !output.status.success() {
-            task_panic!(format!(
+            bail!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
                 String::from_utf8_lossy(&output.stderr)
