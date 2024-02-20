@@ -67,10 +67,60 @@ fn render_tag_hidden_input(
 
 fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Result<Value> {
     render(_ids, tag_value)?;
-    if !tag_value.is_string() {
-        panic!("Input prompt is not a valid string")
+    // check if the input type is correct
+    if !tag_value.is_string() && !tag_value.is_sequence() && !tag_value.is_mapping() {
+        bail!("Input prompt is not a valid string, sequence or map");
     }
-    print!("{}", tag_value.as_str().unwrap());
+    let (prompt, default): (String, Option<String>) = match tag_value {
+        Value::String(prompt) => (prompt.to_owned(), None),
+        Value::Sequence(seq) => {
+            // check if length is correct
+            if seq.len() != 2 && seq.len() != 1 {
+                bail!("!Input takes 1 or 2 arguments but got {}", seq.len());
+            }
+            // check if prompt is string
+            if !seq.get(0).unwrap().is_string() {
+                bail!("Input prompt is not a valid string");
+            }
+            // check if prompt is string if given
+            if seq.len() == 2 && !seq.get(1).unwrap().is_string() {
+                bail!("Input default value is not a valid string");
+            }
+            // return
+            (
+                seq[0].as_str().unwrap().to_owned(),
+                if seq.len() == 2 {
+                    Some(seq[1].as_str().unwrap().to_owned())
+                } else {
+                    None
+                },
+            )
+        }
+        Value::Mapping(map) => {
+            // get and check prompt
+            let prompt = match get_entry(map, Value::String(String::from("prompt"))) {
+                Some(value) => match value {
+                    Value::String(text) => text,
+                    _ => bail!("prompt is not of type string"),
+                },
+                None => bail!("prompt was not provided in !Input"),
+            };
+            // get and check default if given
+            let default = match get_entry(map, Value::String(String::from("default"))) {
+                Some(value) => match value {
+                    Value::String(text) => Some(text),
+                    _ => bail!("default is not of type string"),
+                },
+                _ => None,
+            };
+            // return
+            (prompt, default)
+        }
+        _ => panic!("Input prompt is not a valid string, sequence or map"),
+    };
+    // print the prompt
+    print!("{}", prompt);
+    // get input
     std::io::stdout()
         .flush()
         .context("failed to flush stdout")?;
@@ -81,6 +131,11 @@ fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) ->
     while input.ends_with('\n') || input.ends_with('\r') {
         input.remove(input.len() - 1);
     }
+    // replace with default if default and input is empty
+    if default.is_some() && input.is_empty() {
+        input = default.unwrap();
+    }
+    // return input
     Ok(Value::String(input))
 }
 
