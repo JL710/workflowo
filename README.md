@@ -9,6 +9,8 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 ## Todo
 - [ ] resolve relative/`~` paths
 - [ ] default for inputs
+- [ ] parallel execution task
+- [ ] exit codes for bash and cmd task
 - [X] improve error display
 
 ## Installation
