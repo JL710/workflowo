@@ -20,9 +20,9 @@ pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) -> Result<()
         Value::Tagged(tagged) => {
             let mut new_value = match tagged.tag.to_string().as_str() {
                 "!Input" => {
-                    render_tag_input(_ids, &mut tagged.value).context("failed to resolve !Input")?
+                    render_tag_input(_ids, &mut tagged.value, false).context("failed to resolve !Input")?
                 }
-                "!HiddenInput" => render_tag_hidden_input(_ids, &mut tagged.value)
+                "!HiddenInput" => render_tag_input(_ids, &mut tagged.value, true)
                     .context("failed to resolve !HiddenInput")?,
                 "!StrF" => {
                     render_tag_strf(_ids, &tagged.value).context("failed to resolve !StrF")?
@@ -52,20 +52,7 @@ fn render_tag_strf(_ids: &mut HashMap<String, Value>, tag_value: &Value) -> Resu
     Ok(Value::String(formatted_string))
 }
 
-fn render_tag_hidden_input(
-    _ids: &mut HashMap<String, Value>,
-    tag_value: &mut Value,
-) -> Result<Value> {
-    render(_ids, tag_value)?;
-    if !tag_value.is_string() {
-        bail!("HiddenInput prompt is not a valid string")
-    }
-    Ok(Value::String(
-        rpassword::prompt_password(tag_value.as_str().unwrap()).expect("rpassword input failed"),
-    ))
-}
-
-fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) -> Result<Value> {
+fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value, hidden: bool) -> Result<Value> {
     render(_ids, tag_value)?;
     // check if the input type is correct
     if !tag_value.is_string() && !tag_value.is_sequence() && !tag_value.is_mapping() {
@@ -76,7 +63,7 @@ fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) ->
         Value::Sequence(seq) => {
             // check if length is correct
             if seq.len() != 2 && seq.len() != 1 {
-                bail!("!Input takes 1 or 2 arguments but got {}", seq.len());
+                bail!("!Input and !HiddenInput take 1 or 2 arguments but got {}", seq.len());
             }
             // check if prompt is string
             if !seq.get(0).unwrap().is_string() {
@@ -121,13 +108,22 @@ fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value) ->
     // print the prompt
     print!("{}", prompt);
     // get input
-    std::io::stdout()
-        .flush()
-        .context("failed to flush stdout")?;
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .context("failed to read line")?;
+    let mut input = match hidden {
+        true => {
+            rpassword::prompt_password(prompt).context("hidden input failed (rpassword)")?
+        },
+        false => {
+            std::io::stdout()
+                .flush()
+                .context("failed to flush stdout")?;
+            let mut input_string = String::new();
+            std::io::stdin()
+                .read_line(&mut input_string)
+                .context("failed to read line")?;
+            input_string
+        }
+    };
+    // remove linebraks
     while input.ends_with('\n') || input.ends_with('\r') {
         input.remove(input.len() - 1);
     }
