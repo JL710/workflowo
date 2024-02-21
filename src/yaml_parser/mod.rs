@@ -370,7 +370,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T> {
             let allowed_exit_codes = match get_entry(cmd_map, "exit_codes".into()) {
                 Some(entry) => match entry {
                     Value::Sequence(seq) => {
-                        if seq.len() < 1 {
+                        if seq.is_empty() {
                             bail!("no exit codes are provided");
                         }
                         let mut codes = Vec::new();
