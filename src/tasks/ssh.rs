@@ -1,5 +1,6 @@
 use super::Task;
 use anyhow::{bail, Context, Result};
+use resolve_path::PathResolveExt;
 use std::{
     fmt,
     fmt::Display,
@@ -134,7 +135,7 @@ pub trait RemoteTransfer {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Self;
+    ) -> Result<Self> where Self: Sized;
 }
 
 #[derive(Debug)]
@@ -153,14 +154,14 @@ impl RemoteTransfer for ScpFileDownload {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Self {
-        ScpFileDownload {
+    ) -> Result<Self> {
+        Ok(ScpFileDownload {
             address,
             user,
             password,
             remote_path,
-            local_path,
-        }
+            local_path: local_path.try_resolve().context("")?.into(),
+        })
     }
 }
 
@@ -225,14 +226,14 @@ impl RemoteTransfer for ScpFileUpload {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Self {
-        ScpFileUpload {
+    ) -> Result<Self> {
+        Ok(ScpFileUpload {
             address,
             user,
             password,
             remote_path,
-            local_path,
-        }
+            local_path: local_path.try_resolve().context("")?.into(),
+        })
     }
 }
 
@@ -301,14 +302,14 @@ impl RemoteTransfer for SftpDownload {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             address,
             user,
             password,
             remote_path,
-            local_path,
-        }
+            local_path: local_path.try_resolve().context("")?.into(),
+        })
     }
 }
 
@@ -438,14 +439,14 @@ impl RemoteTransfer for SftpUpload {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             address,
             user,
             password,
             remote_path,
-            local_path,
-        }
+            local_path: local_path.try_resolve().context("")?.into(),
+        })
     }
 }
 

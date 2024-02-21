@@ -229,7 +229,7 @@ fn parse_remote_transfer<T: RemoteTransfer>(value: &Value) -> Result<T> {
         _ => bail!("local_path is not given"),
     };
 
-    Ok(T::new(address, username, password, remote_path, local_path))
+    Ok(T::new(address, username, password, remote_path, local_path).context("Could not create Task for remote transfer operation")?)
 }
 
 fn parse_ssh(value: &Value) -> Result<SshTask> {
