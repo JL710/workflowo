@@ -38,13 +38,13 @@ pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) -> Result<()
 
 fn render_tag_strf(_ids: &mut HashMap<String, Value>, tag_value: &Value) -> Result<Value> {
     if !tag_value.is_sequence() {
-        panic!("StringF needs to be a sequence of Strings",);
+        bail!("StringF needs to be a sequence of Strings",);
     }
     let mut formatted_string = String::new();
     for v in tag_value.as_sequence().unwrap().to_owned().iter_mut() {
         render(_ids, v)?;
         if !v.is_string() {
-            panic!("StringF needs to be a sequence of strings",);
+            bail!("StringF needs to be a sequence of strings",);
         }
         formatted_string += v.as_str().unwrap();
     }
@@ -109,10 +109,12 @@ fn render_tag_input(
             // return
             (prompt, default)
         }
-        _ => panic!("Input prompt is not a valid string, sequence or map"),
+        _ => bail!("Input prompt is not a valid string, sequence or map"),
     };
     // print the prompt
-    print!("{}", prompt);
+    if !hidden {
+        print!("{}", prompt);
+    }
     // get input
     let mut input = match hidden {
         true => rpassword::prompt_password(prompt).context("hidden input failed (rpassword)")?,
