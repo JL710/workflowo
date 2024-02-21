@@ -19,9 +19,8 @@ pub fn render(_ids: &mut HashMap<String, Value>, value: &mut Value) -> Result<()
         }
         Value::Tagged(tagged) => {
             let mut new_value = match tagged.tag.to_string().as_str() {
-                "!Input" => {
-                    render_tag_input(_ids, &mut tagged.value, false).context("failed to resolve !Input")?
-                }
+                "!Input" => render_tag_input(_ids, &mut tagged.value, false)
+                    .context("failed to resolve !Input")?,
                 "!HiddenInput" => render_tag_input(_ids, &mut tagged.value, true)
                     .context("failed to resolve !HiddenInput")?,
                 "!StrF" => {
@@ -52,7 +51,11 @@ fn render_tag_strf(_ids: &mut HashMap<String, Value>, tag_value: &Value) -> Resu
     Ok(Value::String(formatted_string))
 }
 
-fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value, hidden: bool) -> Result<Value> {
+fn render_tag_input(
+    _ids: &mut HashMap<String, Value>,
+    tag_value: &mut Value,
+    hidden: bool,
+) -> Result<Value> {
     render(_ids, tag_value)?;
     // check if the input type is correct
     if !tag_value.is_string() && !tag_value.is_sequence() && !tag_value.is_mapping() {
@@ -63,7 +66,10 @@ fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value, hi
         Value::Sequence(seq) => {
             // check if length is correct
             if seq.len() != 2 && seq.len() != 1 {
-                bail!("!Input and !HiddenInput take 1 or 2 arguments but got {}", seq.len());
+                bail!(
+                    "!Input and !HiddenInput take 1 or 2 arguments but got {}",
+                    seq.len()
+                );
             }
             // check if prompt is string
             if !seq.get(0).unwrap().is_string() {
@@ -109,9 +115,7 @@ fn render_tag_input(_ids: &mut HashMap<String, Value>, tag_value: &mut Value, hi
     print!("{}", prompt);
     // get input
     let mut input = match hidden {
-        true => {
-            rpassword::prompt_password(prompt).context("hidden input failed (rpassword)")?
-        },
+        true => rpassword::prompt_password(prompt).context("hidden input failed (rpassword)")?,
         false => {
             std::io::stdout()
                 .flush()
