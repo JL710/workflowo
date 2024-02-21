@@ -10,7 +10,7 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 - [ ] resolve relative/`~` paths
 - [X] default for inputs
 - [ ] parallel execution task
-- [ ] exit codes for bash and cmd task
+- [X] exit codes for bash and cmd task
 - [X] improve error display
 
 ## Installation
