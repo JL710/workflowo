@@ -367,9 +367,34 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T> {
                 _ => None,
             };
 
+            let allowed_exit_codes = match get_entry(cmd_map, "exit_codes".into()) {
+                Some(entry) => match entry {
+                    Value::Sequence(seq) => {
+                        if seq.len() < 1 {
+                            bail!("no exit codes are provided");
+                        }
+                        let mut codes = Vec::new();
+                        for val in seq {
+                            if let Value::Number(num) = val {
+                                codes.push(
+                                    num.as_i64().context("could not convert exit code to i64")?
+                                        as i32,
+                                );
+                            } else {
+                                bail!("exit code is not a number");
+                            }
+                        }
+                        Some(codes)
+                    }
+                    _ => bail!("allowed exit codes is not a sequence"),
+                },
+                _ => None,
+            };
+
             return Ok(T::new(
                 command_value.split(' ').map(|x| x.to_string()).collect(),
                 work_dir_value,
+                allowed_exit_codes,
             ));
         }
         val => match val {
@@ -377,6 +402,7 @@ fn parse_shell_command_task<T: ShellCommand>(value: &Value) -> Result<T> {
             Value::String(string) => {
                 return Ok(T::new(
                     string.split(' ').map(|x| x.to_string()).collect(),
+                    None,
                     None,
                 ));
             }
