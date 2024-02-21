@@ -4,18 +4,31 @@ use std::fmt::{self, Display};
 use std::process::Command;
 
 pub trait ShellCommand {
-    fn new(args: Vec<String>, work_dir: Option<String>) -> Self;
+    fn new(
+        args: Vec<String>,
+        work_dir: Option<String>,
+        allowed_exit_codes: Option<Vec<i32>>,
+    ) -> Self;
 }
 
 #[derive(Debug)]
 pub struct Bash {
     args: Vec<String>,
     work_dir: Option<String>,
+    allowed_exit_codes: Option<Vec<i32>>,
 }
 
 impl ShellCommand for Bash {
-    fn new(args: Vec<String>, work_dir: Option<String>) -> Self {
-        Bash { args, work_dir }
+    fn new(
+        args: Vec<String>,
+        work_dir: Option<String>,
+        allowed_exit_codes: Option<Vec<i32>>,
+    ) -> Self {
+        Bash {
+            args,
+            work_dir,
+            allowed_exit_codes,
+        }
     }
 }
 
@@ -32,7 +45,14 @@ impl Task for Bash {
             .arg(&self.args.join(" "))
             .output()
             .context("Failed while executing bash command")?;
-        if !output.status.success() {
+        let exit_code = output
+            .status
+            .code()
+            .context("process did not return an exit code")?;
+        if match &self.allowed_exit_codes {
+            Some(codes) => !codes.contains(&exit_code),
+            None => exit_code != 0,
+        } {
             bail!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,
@@ -53,11 +73,20 @@ impl Display for Bash {
 pub struct Cmd {
     args: Vec<String>,
     work_dir: Option<String>,
+    allowed_exit_codes: Option<Vec<i32>>,
 }
 
 impl ShellCommand for Cmd {
-    fn new(args: Vec<String>, work_dir: Option<String>) -> Self {
-        Cmd { args, work_dir }
+    fn new(
+        args: Vec<String>,
+        work_dir: Option<String>,
+        allowed_exit_codes: Option<Vec<i32>>,
+    ) -> Self {
+        Cmd {
+            args,
+            work_dir,
+            allowed_exit_codes,
+        }
     }
 }
 
@@ -74,7 +103,14 @@ impl Task for Cmd {
             .args(&self.args)
             .output()
             .context("Failed while cmd execution")?;
-        if !output.status.success() {
+        let exit_code = output
+            .status
+            .code()
+            .context("process did not return an exit code")?;
+        if match &self.allowed_exit_codes {
+            Some(codes) => !codes.contains(&exit_code),
+            None => exit_code != 0,
+        } {
             bail!(format!(
                 "Error: {:?} did not success and raised an error!\n{}",
                 &self.args,

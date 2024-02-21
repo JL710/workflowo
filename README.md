@@ -61,7 +61,9 @@ example_job:
     - bash:
         command: 'mkdir test'
         work_dir: "/home/someUser"
+        exit_codes: [0, 1]
 ```
+> `work_dir` and `exit_codes` are optional
 
 ### OS Dependent Task
 Sometimes it is needed to execute only if you are on a specific os.
