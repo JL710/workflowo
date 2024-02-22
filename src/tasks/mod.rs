@@ -138,13 +138,13 @@ impl Display for PrintTask {
     }
 }
 
-struct ParallelTask {
+pub struct ParallelTask {
     tasks: Vec<Arc<Box<dyn Task>>>,
     threads: u8,
 }
 
 impl ParallelTask {
-    fn new(tasks: Vec<Box<dyn Task>>, threads: u8) -> Self {
+    pub fn new(tasks: Vec<Box<dyn Task>>, threads: u8) -> Self {
         let mut new_tasks = Vec::new();
         for task in tasks {
             new_tasks.push(Arc::new(task));
@@ -188,7 +188,7 @@ impl Display for ParallelTask {
         let mut text = String::new();
         for task in &self.tasks {
             text.push_str(&format!("{},", task));
-         }
+        }
 
         write!(
             f,
