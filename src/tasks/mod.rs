@@ -2,8 +2,9 @@ use std::{env, fmt, fmt::Display};
 pub mod shell;
 pub mod ssh;
 use anyhow::{Context, Result};
+use std::sync::Arc;
 
-pub trait Task: Display {
+pub trait Task: Display + Sync + Send {
     /// Will be called when the task should be executed.
     fn execute(&self) -> Result<()>;
 }
@@ -134,5 +135,65 @@ impl Task for PrintTask {
 impl Display for PrintTask {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+struct ParallelTask {
+    tasks: Vec<Arc<Box<dyn Task>>>,
+    threads: u8,
+}
+
+impl ParallelTask {
+    fn new(tasks: Vec<Box<dyn Task>>, threads: u8) -> Self {
+        let mut new_tasks = Vec::new();
+        for task in tasks {
+            new_tasks.push(Arc::new(task));
+        }
+        Self {
+            tasks: new_tasks,
+            threads,
+        }
+    }
+}
+
+impl Task for ParallelTask {
+    fn execute(&self) -> Result<()> {
+        let pool = threadpool::ThreadPool::new(self.threads as usize);
+
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        for task in &self.tasks {
+            let t = task.clone();
+            let sender = tx.clone();
+            pool.execute(move || {
+                let result = t.execute();
+                sender.send(result).unwrap();
+            });
+        }
+
+        for _ in 0..self.tasks.len() {
+            rx.recv()
+                .context("receiving of thread result failed")?
+                .context("Task of parallel task failed")?;
+        }
+
+        pool.join();
+
+        Ok(())
+    }
+}
+
+impl Display for ParallelTask {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut text = String::new();
+        for task in &self.tasks {
+            text.push_str(&format!("{},", task));
+         }
+
+        write!(
+            f,
+            "ParallelTask: {{ threads: {} tasks: {{ {} }} }}",
+            self.threads, text
+        )
     }
 }

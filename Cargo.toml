@@ -13,3 +13,4 @@ rpassword = "7.2.0"
 serde = { version = "1.0.167", features = ["derive"] }
 serde_yaml = "0.9.22"
 ssh2 = "0.9.4"
+threadpool = "1.8.1"
