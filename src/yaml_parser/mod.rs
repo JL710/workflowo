@@ -2,7 +2,7 @@ use crate::tasks::shell::{Bash, Cmd, ShellCommand};
 use crate::tasks::ssh::{
     RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshCommand, SshTask,
 };
-use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
+use crate::tasks::{Job, OSDependent, ParallelTask, PrintTask, Task, OS};
 use anyhow::{bail, Context, Result};
 use serde_yaml::{self, Mapping, Value};
 use std::fs::File;
@@ -161,11 +161,57 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>> {
                     bail!(format!("Parsing Error in print: {}", error));
                 }
             },
+            "parallel" => {
+                return Ok(Box::new(
+                    parse_parallel_task(root_map, task_value)
+                        .context("Parsing Error in parallel task")?,
+                ))
+            }
             _ => bail!("unrecognized task in"),
         }
     }
 
     bail!("Task could not be parsed");
+}
+
+fn parse_parallel_task(root_map: &Mapping, value: &Value) -> Result<ParallelTask> {
+    let mut threads = (std::thread::available_parallelism()
+        .context("failed to estimate best thread amount")?
+        .get()
+        - 1) as u8; // -1 because of main thread
+    let mut tasks = Vec::new();
+
+    let task_seq = match value {
+        Value::Sequence(seq) => seq.to_owned(),
+        Value::Mapping(map) => {
+            // get threads number
+            if let Some(thread_value) = get_entry(map, "threads".into()) {
+                if thread_value.is_u64() {
+                    threads = thread_value.as_u64().unwrap() as u8;
+                } else {
+                    bail!("threads value of parallel task is not a valid number");
+                }
+            }
+            // get/return task seq
+            match get_entry(map, "tasks".into())
+                .context("tasks was not provided to parallel task")?
+            {
+                Value::Sequence(seq) => seq,
+                _ => bail!(""),
+            }
+        }
+        _ => bail!("parallel task needs to be a sequence or mapping but is not"),
+    };
+    if task_seq.is_empty() {
+        bail!("task sequence has no entries");
+    }
+    for item in task_seq {
+        tasks.push(
+            parse_task(root_map, &item).context("failed to subtask parse task of parallel task")?,
+        );
+    }
+
+    Ok(ParallelTask::new(tasks, threads))
 }
 
 fn parse_print(value: &Value) -> Result<PrintTask> {
