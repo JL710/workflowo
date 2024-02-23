@@ -212,8 +212,8 @@ Formats to:
 
 Asks via command line for an input. The input will be used as the value.
 
-### Id
-Is able to be used on `!Input` Tags (on everything else as well). When using the yaml default, you have to input at every use. With `!Input` once.
+### !Id
+Is able to be used on `!Input` Tags (on everything else as well). When using the yaml default id with inputs, you have to input at every use. With `!Input` only once.
 ```yaml
 IGNORE:
   - taken_input: &taken_input !Id ["taken_input", !Input "Input: "]
