@@ -2,7 +2,7 @@ use crate::tasks::shell::{Bash, Cmd, ShellCommand};
 use crate::tasks::ssh::{
     RemoteTransfer, ScpFileDownload, ScpFileUpload, SftpDownload, SftpUpload, SshCommand, SshTask,
 };
-use crate::tasks::{Job, OSDependent, PrintTask, Task, OS};
+use crate::tasks::{Job, OSDependent, ParallelTask, PrintTask, Task, OS};
 use anyhow::{bail, Context, Result};
 use serde_yaml::{self, Mapping, Value};
 use std::fs::File;
@@ -26,27 +26,24 @@ fn read_yaml_file(path: PathBuf) -> Result<Value> {
     Ok(value)
 }
 
-fn parse_jobs(data: Mapping) -> Vec<Job> {
+fn parse_jobs(data: Mapping) -> Result<Vec<Job>> {
     let mut jobs = Vec::new();
 
     for (root_key, _root_value) in &data {
         if !root_key.is_string() {
-            panic!("Job {:?} is has not a valid string as name", root_key);
+            bail!("Job {:?} is has not a valid string as name", root_key);
         }
 
         if root_key.as_str().unwrap() == "IGNORE" {
             continue;
         }
-
-        let job = parse_job(&data, root_key.as_str().unwrap().to_string());
-
-        match job {
-            Ok(value) => jobs.push(value),
-            Err(error) => panic!("Error: {}", error),
-        }
+        jobs.push(
+            parse_job(&data, root_key.as_str().unwrap().to_string())
+                .context("parsing job failed")?,
+        );
     }
 
-    jobs
+    Ok(jobs)
 }
 
 fn parse_job(root_map: &Mapping, name: String) -> Result<Job> {
@@ -65,12 +62,9 @@ fn parse_job(root_map: &Mapping, name: String) -> Result<Job> {
     let mut job = Job::new(name.clone());
 
     for child in job_sequence {
-        match parse_task(root_map, child) {
-            Ok(task) => job.add_child(task),
-            Err(error) => {
-                bail!(format!("Error while parsing job {}: {}", name, error));
-            }
-        }
+        job.add_child(
+            parse_task(root_map, child).context(format!("Error while parsing job {}", name))?,
+        );
     }
     Ok(job)
 }
@@ -101,71 +95,115 @@ fn parse_task(root_map: &Mapping, value: &Value) -> Result<Box<dyn Task>> {
         }
 
         match task_key.as_str().unwrap() {
-            "bash" => match parse_shell_command_task::<Bash>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(err) => {
-                    bail!(format!("Error with bash task: {}", err));
-                }
-            },
-            "cmd" => match parse_shell_command_task::<Cmd>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(err) => {
-                    bail!(format!("Error with cmd task: {}", err));
-                }
-            },
-            "on-windows" => match parse_os_dependent(root_map, OS::Windows, task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("parsing Error in on-windows: {}", error));
-                }
-            },
-            "on-linux" => match parse_os_dependent(root_map, OS::Linux, task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("parsing Error in on-windows: {}", error));
-                }
-            },
-            "ssh" => match parse_ssh(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in ssh: {}", error));
-                }
-            },
-            "scp-download" => match parse_remote_transfer::<ScpFileDownload>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in scp-download: {}", error));
-                }
-            },
-            "scp-upload" => match parse_remote_transfer::<ScpFileUpload>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in scp-upload: {}", error));
-                }
-            },
-            "sftp-download" => match parse_remote_transfer::<SftpDownload>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in sftp-download: {}", error));
-                }
-            },
-            "sftp-upload" => match parse_remote_transfer::<SftpUpload>(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in sftp-upload: {}", error));
-                }
-            },
-            "print" => match parse_print(task_value) {
-                Ok(task) => return Ok(Box::new(task)),
-                Err(error) => {
-                    bail!(format!("Parsing Error in print: {}", error));
-                }
-            },
-            _ => bail!("unrecognized task in"),
+            "bash" => {
+                return Ok(Box::new(
+                    parse_shell_command_task::<Bash>(task_value)
+                        .context("parsing error with bash task")?,
+                ))
+            }
+            "cmd" => {
+                return Ok(Box::new(
+                    parse_shell_command_task::<Cmd>(task_value)
+                        .context("parsing error with cmd task")?,
+                ))
+            }
+            "on-windows" => {
+                return Ok(Box::new(
+                    parse_os_dependent(root_map, OS::Windows, task_value)
+                        .context("parsing error in on-window")?,
+                ))
+            }
+            "on-linux" => {
+                return Ok(Box::new(
+                    parse_os_dependent(root_map, OS::Linux, task_value)
+                        .context("parsing error in on-linux")?,
+                ))
+            }
+            "ssh" => {
+                return Ok(Box::new(
+                    parse_ssh(task_value).context("parsing error in ssh")?,
+                ))
+            }
+            "scp-download" => {
+                return Ok(Box::new(
+                    parse_remote_transfer::<ScpFileDownload>(task_value)
+                        .context("parsing error in scp-download")?,
+                ))
+            }
+            "scp-upload" => {
+                return Ok(Box::new(
+                    parse_remote_transfer::<ScpFileUpload>(task_value)
+                        .context("parsing error in scp-upload")?,
+                ))
+            }
+            "sftp-download" => {
+                return Ok(Box::new(
+                    parse_remote_transfer::<SftpDownload>(task_value)
+                        .context("parsing error in sftp-download")?,
+                ))
+            }
+            "sftp-upload" => {
+                return Ok(Box::new(
+                    parse_remote_transfer::<SftpUpload>(task_value)
+                        .context("parsing error in sftp-upload")?,
+                ))
+            }
+            "print" => {
+                return Ok(Box::new(
+                    parse_print(task_value).context("parsing error in print")?,
+                ))
+            }
+            "parallel" => {
+                return Ok(Box::new(
+                    parse_parallel_task(root_map, task_value)
+                        .context("parsing error in parallel task")?,
+                ))
+            }
+            task_name => bail!("unrecognized task {}", task_name),
         }
     }
 
-    bail!("Task could not be parsed");
+    bail!("task could not be parsed");
+}
+
+fn parse_parallel_task(root_map: &Mapping, value: &Value) -> Result<ParallelTask> {
+    let mut threads = (std::thread::available_parallelism()
+        .context("failed to estimate best thread amount")?
+        .get()
+        - 1) as u8; // -1 because of main thread
+    let mut tasks = Vec::new();
+
+    let task_seq = match value {
+        Value::Sequence(seq) => seq.to_owned(),
+        Value::Mapping(map) => {
+            // get threads number
+            if let Some(thread_value) = get_entry(map, "threads".into()) {
+                if thread_value.is_u64() {
+                    threads = thread_value.as_u64().unwrap() as u8;
+                } else {
+                    bail!("threads value of parallel task is not a valid number");
+                }
+            }
+            // get/return task seq
+            match get_entry(map, "tasks".into())
+                .context("tasks was not provided to parallel task")?
+            {
+                Value::Sequence(seq) => seq,
+                _ => bail!(""),
+            }
+        }
+        _ => bail!("parallel task needs to be a sequence or mapping but is not"),
+    };
+    if task_seq.is_empty() {
+        bail!("task sequence has no entries");
+    }
+    for item in task_seq {
+        tasks.push(
+            parse_task(root_map, &item).context("failed to subtask parse task of parallel task")?,
+        );
+    }
+
+    Ok(ParallelTask::new(tasks, threads))
 }
 
 fn parse_print(value: &Value) -> Result<PrintTask> {
@@ -229,7 +267,8 @@ fn parse_remote_transfer<T: RemoteTransfer>(value: &Value) -> Result<T> {
         _ => bail!("local_path is not given"),
     };
 
-    Ok(T::new(address, username, password, remote_path, local_path).context("Could not create Task for remote transfer operation")?)
+    T::new(address, username, password, remote_path, local_path)
+        .context("Could not create Task for remote transfer operation")
 }
 
 fn parse_ssh(value: &Value) -> Result<SshTask> {
@@ -416,7 +455,7 @@ pub fn jobs_from_file(path: PathBuf) -> Result<Vec<Job>> {
     let mut value = read_yaml_file(path).context("reading yaml error")?;
     render::render(&mut std::collections::HashMap::new(), &mut value)
         .context("resolving yaml error")?; // pre render everything
-    Ok(parse_jobs(value.as_mapping().unwrap().to_owned()))
+    parse_jobs(value.as_mapping().unwrap().to_owned()).context("failed to parse jobs in file")
 }
 
 #[cfg(test)]

@@ -135,7 +135,9 @@ pub trait RemoteTransfer {
         password: String,
         remote_path: PathBuf,
         local_path: PathBuf,
-    ) -> Result<Self> where Self: Sized;
+    ) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 #[derive(Debug)]

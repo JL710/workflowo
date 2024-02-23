@@ -9,7 +9,7 @@ Be careful when executing workflowo jobs from others. They may contain malicious
 ## Todo
 - [X] resolve relative/`~` paths for file transfer
 - [X] default for inputs
-- [ ] parallel execution task
+- [x] parallel execution task
 - [X] exit codes for bash and cmd task
 - [X] improve error display
 
@@ -150,6 +150,32 @@ example_job:
       remote_path: "/home/some_user/remote_file.txt"
       local_path: "some_local_file.txt"
 ```
+
+### Parallel Execution
+This allows to execute tasks on multiple threads.
+```yaml
+example_job1:
+  - parallel:
+    - bash: "sleep 5 && mkdir test1"
+    - bash: "sleep 5 && mkdir test2"
+  - bash: "sleep 1 && rmdir test1 && rmdir test2"
+
+example_job2:
+  - parallel:
+      tasks:
+        - bash: "sleep 5 && mkdir test1"
+        - bash: "sleep 5 && mkdir test2"
+  - bash: "sleep 1 && rmdir test1 && rmdir test2"
+
+example_job3:
+  - parallel:
+      threads: 2
+      tasks:
+        - bash: "sleep 5 && mkdir test1"
+        - bash: "sleep 5 && mkdir test2"
+  - bash: "sleep 1 && rmdir test1 && rmdir test2"
+```
+> all jobs in this example will take only 5 seconds to execute
 
 
 ## IGNORE
